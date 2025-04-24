@@ -1,39 +1,58 @@
-import axios from "axios"
+import { apiRequest } from "../api"
 
-const API_URL = "https://machine-alert.onrender.com/api/calls"
+const BASE_URL = "api/calls"
 
 // Get all calls with optional filtering
 export const getCalls = async (filters = {}) => {
   try {
     console.log("Fetching calls with filters:", filters)
-    const response = await axios.get(API_URL, { params: filters })
-    console.log("Calls API response:", response)
-
-    let callsData = []
-
-    if (response && response.data && Array.isArray(response.data)) {
-      callsData = response.data
-    } else if (Array.isArray(response)) {
-      callsData = response
-    }
+    const calls = await apiRequest("GET", BASE_URL, null, false, filters)
 
     // Process calls to ensure they have remainingTime
-    return callsData.map((call) => {
-      if (call.status === "Pendiente" && !call.remainingTime && call.remainingTime !== 0) {
-        // Calculate remaining time (90 minutes from call time)
-        const callTime = new Date(call.callTime).getTime()
-        const currentTime = new Date().getTime()
-        const elapsedSeconds = Math.floor((currentTime - callTime) / 1000)
-        const totalSeconds = 90 * 60 // 90 minutes in seconds
-        const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds)
+    if (Array.isArray(calls)) {
+      return calls.map((call) => {
+        // Always recalculate remaining time for pending calls
+        if (call.status === "Pendiente") {
+          try {
+            // Ensure callTime is a valid date
+            const callTime = new Date(call.callTime).getTime()
 
-        return {
-          ...call,
-          remainingTime: remainingSeconds,
+            // Check if callTime is valid
+            if (isNaN(callTime)) {
+              console.error("Invalid callTime for call:", call)
+              return {
+                ...call,
+                remainingTime: 0,
+              }
+            }
+
+            const currentTime = new Date().getTime()
+            const elapsedSeconds = Math.floor((currentTime - callTime) / 1000)
+            const totalSeconds = 90 * 60 // 90 minutes in seconds
+            const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds)
+
+            return {
+              ...call,
+              remainingTime: remainingSeconds,
+            }
+          } catch (error) {
+            console.error("Error calculating remaining time:", error, call)
+            return {
+              ...call,
+              remainingTime: 0,
+            }
+          }
+        } else {
+          // For completed or expired calls, set remainingTime to 0
+          return {
+            ...call,
+            remainingTime: 0,
+          }
         }
-      }
-      return call
-    })
+      })
+    }
+
+    return calls || []
   } catch (error) {
     console.error("Error in getCalls:", error)
     return []
@@ -45,22 +64,39 @@ export const createCall = async (data) => {
   try {
     console.log("Creating call with data:", data)
 
-    // Ensure the call has a remainingTime property set to 90 minutes
+    // Ensure the call has the correct data structure
     const callData = {
       ...data,
-      remainingTime: 90 * 60, // 90 minutes in seconds
+      callTime: new Date(), // Ensure we have a valid date
+      date: new Date(),
+      status: "Pendiente",
     }
 
-    const response = await axios.post(API_URL, callData)
-    console.log("Create call response:", response)
-    
-    // Return the response data with remainingTime if not present
-    if (response && response.data) {
-      if (!response.data.remainingTime && response.data.remainingTime !== 0) {
-        response.data.remainingTime = 90 * 60; // 90 minutes in seconds
+    const response = await apiRequest("POST", BASE_URL, callData)
+
+    // Ensure the response has a valid remainingTime
+    if (response) {
+      // Calculate remaining time based on callTime
+      try {
+        const callTime = new Date(response.callTime || new Date()).getTime()
+        const currentTime = new Date().getTime()
+        const elapsedSeconds = Math.floor((currentTime - callTime) / 1000)
+        const totalSeconds = 90 * 60 // 90 minutes in seconds
+        const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds)
+
+        return {
+          ...response,
+          remainingTime: remainingSeconds,
+        }
+      } catch (error) {
+        console.error("Error calculating remaining time for new call:", error)
+        return {
+          ...response,
+          remainingTime: 90 * 60, // Default to 90 minutes
+        }
       }
     }
-    
+
     return response
   } catch (error) {
     console.error("Error in createCall:", error)
@@ -71,22 +107,14 @@ export const createCall = async (data) => {
 // Mark a call as completed
 export const completeCall = async (id, userRole = "LOGISTICA") => {
   try {
-    console.log(`Completing call ${id} as ${userRole}...`);
-    
+    console.log(`Completing call ${id} as ${userRole}...`)
+
     // Include the user role in the request to ensure proper authorization
-    const response = await axios.put(`${API_URL}/${id}/complete`, {
+    return apiRequest("PUT", `${BASE_URL}/${id}/complete`, {
       status: "Realizada",
       completionTime: new Date(),
-      userRole: userRole // Send the user role for authorization
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        // Include any auth headers if needed
-      }
+      userRole: userRole, // Send the user role for authorization
     })
-    
-    console.log(`Call ${id} completed successfully:`, response);
-    return response
   } catch (error) {
     console.error("Error in completeCall:", error)
     throw error
@@ -96,8 +124,7 @@ export const completeCall = async (id, userRole = "LOGISTICA") => {
 // Check for expired calls manually
 export const checkExpiredCalls = async () => {
   try {
-    const response = await axios.post(`${API_URL}/check-expired`)
-    return response
+    return apiRequest("POST", `${BASE_URL}/check-expired`)
   } catch (error) {
     console.error("Error in checkExpiredCalls:", error)
     throw error
@@ -107,44 +134,69 @@ export const checkExpiredCalls = async () => {
 // Export calls to CSV
 export const exportCalls = async (filters = {}) => {
   try {
+    const token = localStorage.getItem("accessToken")
+    if (!token) {
+      throw new Error("No access token found")
+    }
+
     const queryString = new URLSearchParams(filters).toString()
-    window.open(`${API_URL}/export?${queryString}`, "_blank")
+    window.open(`https://machine-alert.onrender.com/${BASE_URL}/export?${queryString}&token=${token}`, "_blank")
   } catch (error) {
     console.error("Error in exportCalls:", error)
     throw error
   }
 }
 
+// Delete a call
+export const deleteCall = async (id) => {
+  try {
+    console.log(`Deleting call with ID: ${id}`)
+    return apiRequest("DELETE", `${BASE_URL}/${id}`)
+  } catch (error) {
+    console.error("Error in deleteCall:", error)
+    throw error
+  }
+}
+
 // Format time for display
 export const formatTime = (seconds) => {
-  if (seconds === null || seconds === undefined) return "0:00"
-  const minutes = Math.floor(seconds / 60)
-  const remainingSeconds = seconds % 60
+  // Handle invalid input
+  if (seconds === null || seconds === undefined || isNaN(seconds)) {
+    console.warn("Invalid seconds value in formatTime:", seconds)
+    return "0:00"
+  }
+
+  // Convert to integer to be safe
+  const secs = Math.floor(Number(seconds))
+  const minutes = Math.floor(secs / 60)
+  const remainingSeconds = secs % 60
   return `${minutes}:${remainingSeconds < 10 ? "0" : ""}${remainingSeconds}`
 }
 
 // Format time with hours for longer durations
 export const formatTimeWithHours = (seconds) => {
-  if (seconds === null || seconds === undefined) return "00:00:00"
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  const secs = seconds % 60
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  // Handle invalid input
+  if (seconds === null || seconds === undefined || isNaN(seconds)) {
+    console.warn("Invalid seconds value in formatTimeWithHours:", seconds)
+    return "00:00:00"
+  }
+
+  // Convert to integer to be safe
+  const secs = Math.floor(Number(seconds))
+  const hours = Math.floor(secs / 3600)
+  const minutes = Math.floor((secs % 3600) / 60)
+  const remainingSecs = secs % 60
+  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${remainingSecs.toString().padStart(2, "0")}`
 }
 
 // Calculate progress percentage (for progress bars)
 export const calculateProgress = (remainingTime) => {
-  const totalTime = 90 * 60 // 90 minutes in seconds
-  return Math.max(0, Math.min(100, (remainingTime / totalTime) * 100))
-}
-export const deleteCall = async (id) => {
-  try {
-    console.log(`Deleting call with ID: ${id}`);
-    const response = await axios.delete(`${API_URL}/${id}`);
-    console.log("Delete call response:", response);
-    return response;
-  } catch (error) {
-    console.error("Error in deleteCall:", error);
-    throw error;
+  // Handle invalid input
+  if (remainingTime === null || remainingTime === undefined || isNaN(remainingTime)) {
+    console.warn("Invalid remainingTime in calculateProgress:", remainingTime)
+    return 0
   }
-};
+
+  const totalTime = 90 * 60 // 90 minutes in seconds
+  return Math.max(0, Math.min(100, (Number(remainingTime) / totalTime) * 100))
+}
