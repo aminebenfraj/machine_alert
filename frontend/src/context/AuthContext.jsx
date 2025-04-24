@@ -49,32 +49,44 @@ export const AuthProvider = ({ children }) => {
     loadUser()
   }, [])
 
-  const login = async (credentials) => {
+  const login = async (license, password) => {
     try {
-      const response = await axios.post("https://machine-alert.onrender.com/api/users/login", credentials)
+      // Using the correct login endpoint from authRoutes.js
+      const response = await axios.post("https://machine-alert.onrender.com/api/auth/login", {
+        license,
+        password
+      })
 
-      const { token, user: userData } = response.data
+      console.log("Login response:", response.data)
+
+      // Extract token from response
+      const { token } = response.data
 
       // Store token in localStorage
       localStorage.setItem("accessToken", token)
 
-      // Store user data
-      if (userData) {
-        localStorage.setItem("user", JSON.stringify(userData))
-      }
-
       // Set default auth header
       axios.defaults.headers.common["Authorization"] = `Bearer ${token}`
 
-      setUser(userData)
-      setIsAuthenticated(true)
+      // Get user profile with the token
+      const userResponse = await axios.get("https://machine-alert.onrender.com/api/users/profile", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (userResponse.data) {
+        localStorage.setItem("user", JSON.stringify(userResponse.data))
+        setUser(userResponse.data)
+        setIsAuthenticated(true)
+      }
 
       return { success: true }
     } catch (error) {
       console.error("Login error:", error)
       return {
         success: false,
-        message: error.response?.data?.message || "Login failed. Please check your credentials.",
+        message: error.response?.data?.error || "Login failed. Please check your credentials.",
       }
     }
   }

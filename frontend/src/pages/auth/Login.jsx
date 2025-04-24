@@ -20,6 +20,7 @@ export default function Login() {
   const navigate = useNavigate()
   const { login } = useAuth()
   const [serverError, setServerError] = useState(null)
+  const [isLoading, setIsLoading] = useState(false)
 
   const form = useForm({
     resolver: zodResolver(loginSchema),
@@ -32,12 +33,20 @@ export default function Login() {
 
   const onSubmit = async (data) => {
     setServerError(null)
+    setIsLoading(true)
     try {
-      await login(data.license, data.password)
-      navigate("/call")
+      const result = await login(data.license, data.password)
+      
+      if (result.success) {
+        navigate("/call")
+      } else {
+        setServerError(result.message)
+      }
     } catch (err) {
       console.error(err)
       setServerError(err.message || "Login failed. Please try again.")
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -137,9 +146,9 @@ export default function Login() {
                       <Button
                         type="submit"
                         className="w-full py-4 text-xl text-white rounded-lg bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800"
-                        disabled={form.formState.isSubmitting}
+                        disabled={isLoading}
                       >
-                        {form.formState.isSubmitting ? (
+                        {isLoading ? (
                           <>
                             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                             Signing in...
@@ -180,4 +189,3 @@ export default function Login() {
     </section>
   )
 }
-
