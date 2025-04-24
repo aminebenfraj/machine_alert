@@ -1,6 +1,6 @@
 import axios from "axios"
 
-const API_URL = "http://localhost:5000/api/call"
+const API_URL = "https://machine-alert.onrender.com"
 
 // Get all calls with optional filtering
 export const getCalls = async (filters = {}) => {
