@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // Base API URL
-const API_URL = "http://192.168.1.187:5000/api";
+const API_URL = "https://machine-alert.onrender.com/api";
 
 // 🔹 Login function (Now uses `license` instead of `email`)
 export const login = async (license, password) => {
