@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../../components/ui/card"
 import { getMachineById, updateMachine } from "../../../apis/gestionStockApi/machineApi"
 import { Save, ArrowLeft } from "lucide-react"
+
 const EditMachine = () => {
   const [machine, setMachine] = useState({
     name: "",
@@ -54,7 +55,6 @@ const EditMachine = () => {
   }
 
   return (
-    <div>
     <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-zinc-900">
       <Card className="w-full max-w-md bg-white shadow-lg dark:bg-zinc-800">
         <CardHeader>
@@ -130,9 +130,7 @@ const EditMachine = () => {
         </form>
       </Card>
     </div>
-    </div>
   )
 }
 
 export default EditMachine
-

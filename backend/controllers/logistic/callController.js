@@ -85,35 +85,35 @@ exports.exportCalls = async (req, res) => {
 // Add a new function to check and update expired calls manually if needed
 exports.completeCall = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { userRole } = req.body;
-    
-    // Check if the user has the LOGISTICA role (case insensitive)
-    const isLogistics = userRole && 
-      (userRole.toUpperCase() === "LOGISTICA" || 
-       userRole.toUpperCase() === "LOGÍSTICA");
-    
+    const { id } = req.params
+
+    // Check if the user has the LOGISTICA role
+    const isLogistics =
+      req.user &&
+      req.user.roles &&
+      req.user.roles.some((role) => role.toUpperCase() === "LOGISTICA" || role.toUpperCase() === "LOGÍSTICA")
+
     if (!isLogistics) {
-      return res.status(403).json({ message: "Only LOGISTICA users can complete calls" });
+      return res.status(403).json({ message: "Only LOGISTICA users can complete calls" })
     }
-    
-    const call = await Call.findById(id);
-    
+
+    const call = await Call.findById(id)
+
     if (!call) {
-      return res.status(404).json({ message: "Call not found" });
+      return res.status(404).json({ message: "Call not found" })
     }
-    
-    call.status = "Realizada";
-    call.completionTime = new Date();
-    
-    await call.save();
-    
-    res.json(call);
+
+    call.status = "Realizada"
+    call.completionTime = new Date()
+
+    await call.save()
+
+    res.json(call)
   } catch (error) {
-    console.error("Error completing call:", error);
-    res.status(500).json({ message: error.message });
+    console.error("Error completing call:", error)
+    res.status(500).json({ message: error.message })
   }
-};
+}
 
 // Add a new function to check and update expired calls manually if needed
 exports.checkExpiredCalls = async (req, res) => {

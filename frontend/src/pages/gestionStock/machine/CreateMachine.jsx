@@ -1,3 +1,4 @@
+"use client"
 
 import { useState } from "react"
 import { motion } from "framer-motion"
@@ -8,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../../components/ui/card"
 import { createMachine } from "../../../apis/gestionStockApi/machineApi"
 import { Sparkles } from "lucide-react"
+
 const CreateMachine = () => {
   const [machine, setMachine] = useState({
     name: "",
@@ -33,7 +35,6 @@ const CreateMachine = () => {
   }
 
   return (
-    <div>
     <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-zinc-900">
       <Card className="w-full max-w-md bg-white shadow-lg dark:bg-zinc-800">
         <CardHeader>
@@ -103,9 +104,7 @@ const CreateMachine = () => {
         </form>
       </Card>
     </div>
-    </div>
   )
 }
 
 export default CreateMachine
-

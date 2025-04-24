@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui
 import { Badge } from "../../../components/ui/badge"
 import { getAllMachines, deleteMachine } from "../../../apis/gestionStockApi/machineApi"
 import { Plus, Edit, Trash2 } from "lucide-react"
+
 const ShowMachines = () => {
   const [machines, setMachines] = useState([])
 
@@ -52,7 +53,6 @@ const ShowMachines = () => {
   }
 
   return (
-    <div>
     <div className="container p-4 mx-auto">
       <Card className="bg-white shadow-lg dark:bg-zinc-800">
         <CardHeader className="flex items-center justify-between">
@@ -110,9 +110,7 @@ const ShowMachines = () => {
         </CardContent>
       </Card>
     </div>
-    </div>
   )
 }
 
 export default ShowMachines
-

@@ -1,35 +1,40 @@
-const express = require("express");
-const router = express.Router();
+const express = require("express")
+const router = express.Router()
 const {
   showUserInfo,
-  updateUserRoles, // ✅ Changed to reflect multiple roles handling
+  updateUserRoles,
   updateCurrentUser,
+  deleteUser,
   deleteCurrentUser,
   getCustomerById,
   getAllCustomers,
-  getRecentUsers
-} = require("../controllers/userController");
+  getRecentUsers,
+} = require("../controllers/userController")
 
-const { protect, verifyAdmin } = require("../middlewares/authMiddleware");
+const { protect, verifyAdmin } = require("../middlewares/authMiddleware")
 
+// Get all customers (Admin only)
+router.get("/customers", protect, verifyAdmin, getAllCustomers)
 
-router.get("/customers", protect, verifyAdmin, getAllCustomers);
-// 🔹 Get Customer by ID (Admin Only)
-router.get("/customer/:id", protect, verifyAdmin, getCustomerById);
-// 🔹 Get Current User Profile (Protected)
-router.get("/profile", protect, showUserInfo);
+// Get customer by ID (Admin only)
+router.get("/customer/:id", protect, verifyAdmin, getCustomerById)
 
-// 🔹 Update Current User Profile (Protected)
-router.put("/update-profile", protect, updateCurrentUser);
+// Get current user profile (Protected)
+router.get("/profile", protect, showUserInfo)
 
-// 🔹 Update User Roles (Admin Only)
-router.put("/role/:license", protect, verifyAdmin, updateUserRoles);
+// Update current user profile (Protected)
+router.put("/update-profile", protect, updateCurrentUser)
 
-// 🔹 Delete Current User Account (Protected)
-router.delete("/delete", protect, deleteCurrentUser);
-router.get("/recent", getRecentUsers); // ✅ Ensure the user is authenticated
+// Update user roles (Admin only)
+router.put("/role/:license", protect, verifyAdmin, updateUserRoles)
 
+// Delete current user account (Protected)
+router.delete("/delete", protect, deleteCurrentUser)
 
+// Delete a user (Admin only)
+router.delete("/:license", protect, verifyAdmin, deleteUser)
 
+// Get recent users
+router.get("/recent", protect, getRecentUsers)
 
-module.exports = router;
+module.exports = router
