@@ -19,7 +19,7 @@ function App() {
   return (
       <AuthProvider>
     <Routes>         
-          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/edit-user/:license" element={<EditUserRoles />} />
@@ -27,7 +27,7 @@ function App() {
         <Route path="/machines/create" element={<CreateMachine />} />          
         <Route path="machines/edit/:id" element={<EditMachine />} />          
         <Route path="machines" element={<ShowMachines />} />      
-        <Route path="/" element={< Call/>} />
+        <Route path="/call" element={< Call/>} />
         <Route path="/profile" element={< ProfilePage/>} />
         <Route path="/settings" element={< SettingsPage/>} />
     </Routes>
