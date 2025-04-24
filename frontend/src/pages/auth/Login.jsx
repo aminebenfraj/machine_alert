@@ -34,7 +34,7 @@ export default function Login() {
     setServerError(null)
     try {
       await login(data.license, data.password)
-      navigate("/")
+      navigate("/call")
     } catch (err) {
       console.error(err)
       setServerError(err.message || "Login failed. Please try again.")
