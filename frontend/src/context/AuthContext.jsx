@@ -49,6 +49,65 @@ export const AuthProvider = ({ children }) => {
     loadUser()
   }, [])
 
+  // Add register function
+  const register = async (license, username, email, password) => {
+    try {
+      console.log("Sending registration request with data:", {
+        license,
+        username,
+        email,
+        password: "***" // Don't log actual password
+      })
+      
+      // Using the registration endpoint
+      const response = await axios.post("https://machine-alert.onrender.com/api/auth/register", {
+        license,
+        username,
+        email,
+        password
+      })
+
+      console.log("Registration successful:", response.data)
+      
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error) {
+      console.error("Registration error:", error)
+      
+      // Detailed error logging
+      if (error.response) {
+        // Server responded with an error status
+        console.error("Registration failed - Server response:", {
+          status: error.response.status,
+          data: error.response.data
+        })
+        
+        return {
+          success: false,
+          message: error.response.data?.error || "Registration failed. Please try again."
+        }
+      } else if (error.request) {
+        // Request was made but no response received
+        console.error("Registration failed - No response received")
+        
+        return {
+          success: false,
+          message: "Network error. Please check your connection and try again."
+        }
+      } else {
+        // Error in setting up the request
+        console.error("Registration failed - Request setup error:", error.message)
+        
+        return {
+          success: false,
+          message: error.message || "Registration failed. Please try again."
+        }
+      }
+    }
+  }
+
   const login = async (license, password) => {
     try {
       // Using the correct login endpoint from authRoutes.js
@@ -112,6 +171,7 @@ export const AuthProvider = ({ children }) => {
         loading,
         login,
         logout,
+        register, // Add register function to context
       }}
     >
       {children}

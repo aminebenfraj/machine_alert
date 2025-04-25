@@ -16,10 +16,43 @@ const generateToken = (user) => {
 
 exports.registerUser = async (req, res) => {
   try {
+    console.log("📥 Registration request received:", {
+      ...req.body,
+      password: req.body.password ? "***" : undefined // Log sanitized data
+    });
+
     const { license, username, email, password, roles, image } = req.body;
 
+    // Validate required fields
+    if (!license) {
+      console.log("❌ Registration failed: Missing license");
+      return res.status(400).json({ error: "License is required" });
+    }
+
+    if (!username) {
+      console.log("❌ Registration failed: Missing username");
+      return res.status(400).json({ error: "Username is required" });
+    }
+
+    if (!email) {
+      console.log("❌ Registration failed: Missing email");
+      return res.status(400).json({ error: "Email is required" });
+    }
+
     if (!password) {
+      console.log("❌ Registration failed: Missing password");
       return res.status(400).json({ error: "Password is required" });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ 
+      $or: [{ license }, { email }] 
+    });
+    
+    if (existingUser) {
+      const duplicateField = existingUser.license === license ? "license" : "email";
+      console.log(`❌ Registration failed: ${duplicateField} already exists`);
+      return res.status(400).json({ error: `User with this ${duplicateField} already exists` });
     }
 
     // ✅ Ensure the password is hashed before storing
@@ -36,11 +69,34 @@ exports.registerUser = async (req, res) => {
     });
 
     await user.save();
-    res.status(201).json({ message: "User registered successfully", user });
+    console.log("✅ User registered successfully:", { license, username, email });
+    
+    res.status(201).json({ 
+      message: "User registered successfully",
+      user: {
+        license: user.license,
+        username: user.username,
+        email: user.email,
+        roles: user.roles
+      }
+    });
 
   } catch (error) {
     console.error("❌ Registration error:", error);
-    res.status(500).json({ error: "Server error" });
+    
+    // Handle MongoDB validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ error: validationErrors.join(', ') });
+    }
+    
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(400).json({ error: `User with this ${field} already exists` });
+    }
+    
+    res.status(500).json({ error: "Server error during registration" });
   }
 };
 

@@ -18,7 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 
 export default function Register() {
   const navigate = useNavigate()
-  const { register: authRegister } = useAuth()
+  const { register } = useAuth()  // Use register from AuthContext (renamed from authRegister)
   const [serverError, setServerError] = useState("")
   const [passwordValue, setPasswordValue] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -41,15 +41,25 @@ export default function Register() {
   const onSubmit = async (data) => {
     setServerError("")
     try {
-      await authRegister(data.license, data.username, data.email, data.password)
-
-      // Use a more elegant success notification instead of alert
-      // For simplicity, we'll still use navigate here, but in a real app
-      // you might want to show a success message with a timer
-      navigate("/login")
+      console.log("Attempting to register user with data:", {
+        license: data.license,
+        username: data.username,
+        email: data.email,
+        password: "***" // Not logging actual password
+      });
+      
+      // Call register function from AuthContext with proper arguments
+      const result = await register(data.license, data.username, data.email, data.password)
+      
+      if (result.success) {
+        console.log("Registration successful, redirecting to login page");
+        navigate("/login")
+      } else {
+        setServerError(result.message)
+      }
     } catch (error) {
-      console.error("Registration failed:", error)
-      setServerError(error.message || "Registration failed. Please try again.")
+      console.error("Registration failed:", error);
+      setServerError(error.message || "Registration failed. Please try again.");
     }
   }
 
