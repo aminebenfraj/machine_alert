@@ -12,7 +12,6 @@ import { Input } from "@/components/ui/input"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Checkbox } from "@/components/ui/checkbox"
 import { BadgeIcon as IdCard, Lock, Loader2 } from "lucide-react"
 
 export default function Login() {
@@ -96,12 +95,7 @@ export default function Login() {
                       name="password"
                       render={({ field }) => (
                         <FormItem>
-                          <div className="flex items-center">
-                            <FormLabel className="text-lg text-blue-600">Password</FormLabel>
-                            <Link href="/forgot-password" className="ml-auto inline-block text-sm underline">
-                              Forgot Password?
-                            </Link>
-                          </div>
+                          <FormLabel className="text-lg text-blue-600">Password</FormLabel>
                           <FormControl>
                             <div className="relative">
                               <Lock className="absolute text-gray-500 transform -translate-y-1/2 left-4 top-1/2" />
@@ -118,14 +112,6 @@ export default function Login() {
                       )}
                     />
 
-                    <div className="flex items-center justify-between mt-4">
-                      <div className="flex items-center">
-                        <Checkbox id="remember-me" />
-                        <label htmlFor="remember-me" className="ml-2 text-lg text-gray-700">
-                          Remember me
-                        </label>
-                      </div>
-                    </div>
                     <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                       <Button
                         type="submit"
