@@ -1,33 +1,36 @@
 "use client"
 
-import { Navigate, useLocation } from "react-router-dom"
-import { useAuth } from "@/context/AuthContext"
+import { Navigate } from "react-router-dom"
+import { useAuth } from "../context/AuthContext"
 
-/**
- * ProtectedRoute component that checks if the user is authenticated
- * If not authenticated, redirects to the login page
- * @param {Object} props - Component props
- * @param {React.ReactNode} props.children - Child components to render if authenticated
- * @returns {React.ReactNode} - The protected route component
- */
-export default function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth()
-  const location = useLocation()
+// Enhanced ProtectedRoute component with role-based access control
+const ProtectedRoute = ({ children, requiredRoles = [] }) => {
+  const { isAuthenticated, loading, user } = useAuth()
 
-  // Show loading state while checking authentication
+  // If still loading auth state, show nothing or a loading spinner
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="w-12 h-12 border-b-2 border-gray-900 rounded-full animate-spin"></div>
-      </div>
+    return <div>Loading...</div>
+  }
+
+  // If not authenticated, redirect to login
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+
+  // If requiredRoles is provided, check if user has at least one of the required roles
+  if (requiredRoles.length > 0) {
+    const hasRequiredRole = user.roles.some((role) =>
+      requiredRoles.some((requiredRole) => requiredRole.toUpperCase() === role.toUpperCase()),
     )
+
+    // If user doesn't have required role, redirect to unauthorized page or dashboard
+    if (!hasRequiredRole) {
+      return <Navigate to="/unauthorized" replace />
+    }
   }
 
-  // If not authenticated, redirect to login with the return URL
-  if (!user) {
-    return <Navigate to="/" state={{ from: location.pathname }} replace />
-  }
-
-  // If authenticated, render the children
+  // If authenticated and has required role (if specified), render the children
   return children
 }
+
+export default ProtectedRoute

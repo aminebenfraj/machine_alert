@@ -8,9 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui
 import { Badge } from "../../../components/ui/badge"
 import { getAllMachines, deleteMachine } from "../../../apis/gestionStockApi/machineApi"
 import { Plus, Edit, Trash2 } from "lucide-react"
+import { useAuth } from "../../../context/AuthContext"
 
 const ShowMachines = () => {
   const [machines, setMachines] = useState([])
+  const { user } = useAuth()
+
+  // Check if user has PRODUCCION or Admin role
+  const canManageMachines = user?.roles?.some((role) => ["Admin", "PRODUCCION"].includes(role))
 
   useEffect(() => {
     fetchMachines()
@@ -57,12 +62,14 @@ const ShowMachines = () => {
       <Card className="bg-white shadow-lg dark:bg-zinc-800">
         <CardHeader className="flex items-center justify-between">
           <CardTitle className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Machines</CardTitle>
-          <Link to="/machines/create">
-            <Button className="text-white bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100">
-              <Plus className="w-4 h-4 mr-2" />
-              Add New Machine
-            </Button>
-          </Link>
+          {canManageMachines && (
+            <Link to="/machines/create">
+              <Button className="text-white bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100">
+                <Plus className="w-4 h-4 mr-2" />
+                Add New Machine
+              </Button>
+            </Link>
+          )}
         </CardHeader>
         <CardContent>
           <motion.div
@@ -83,25 +90,28 @@ const ShowMachines = () => {
                     <h3 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">{machine.name}</h3>
                     <p className="mb-2 text-sm text-zinc-600 dark:text-zinc-300">{machine.description}</p>
                     <Badge className={`mb-4 ${getStatusColor(machine.status)}`}>{machine.status}</Badge>
-                    <div className="flex justify-end space-x-2">
-                      <Link to={`/machines/edit/${machine._id}`}>
+
+                    {canManageMachines && (
+                      <div className="flex justify-end space-x-2">
+                        <Link to={`/machines/edit/${machine._id}`}>
+                          <Button
+                            variant="outline"
+                            className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                          >
+                            <Edit className="w-4 h-4 mr-2" />
+                            Edit
+                          </Button>
+                        </Link>
                         <Button
                           variant="outline"
-                          className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                          className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                          onClick={() => handleDelete(machine._id)}
                         >
-                          <Edit className="w-4 h-4 mr-2" />
-                          Edit
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete
                         </Button>
-                      </Link>
-                      <Button
-                        variant="outline"
-                        className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-                        onClick={() => handleDelete(machine._id)}
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete
-                      </Button>
-                    </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </motion.div>

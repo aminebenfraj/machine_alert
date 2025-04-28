@@ -13,8 +13,12 @@ import Call from "./pages/logistic/call"
 import ProfilePage from "./pages/user/profile-page"
 import SettingsPage from "./pages/user/settings-page"
 import ProtectedRoute from "./components/protected-route"
+import Unauthorized from "./pages/auth/Unauthorized"
 
 function App() {
+  // Define machine access roles
+  const machineAccessRoles = ["Admin", "PRODUCCION"]
+
   return (
     <AuthProvider>
       <MainNav />
@@ -22,12 +26,13 @@ function App() {
         {/* Public routes */}
         <Route path="/" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/unauthorized" element={<Unauthorized />} />
 
         {/* Protected routes */}
         <Route
           path="/admin"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredRoles={["Admin"]}>
               <AdminDashboard />
             </ProtectedRoute>
           }
@@ -35,7 +40,7 @@ function App() {
         <Route
           path="/admin/edit-user/:license"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredRoles={["Admin"]}>
               <EditUserRoles />
             </ProtectedRoute>
           }
@@ -43,15 +48,17 @@ function App() {
         <Route
           path="/admin/create-user"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredRoles={["Admin"]}>
               <CreateUser />
             </ProtectedRoute>
           }
         />
+
+        {/* Machine routes - require Admin or PRODUCCION role */}
         <Route
           path="/machines/create"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredRoles={machineAccessRoles}>
               <CreateMachine />
             </ProtectedRoute>
           }
@@ -59,7 +66,7 @@ function App() {
         <Route
           path="machines/edit/:id"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredRoles={machineAccessRoles}>
               <EditMachine />
             </ProtectedRoute>
           }
@@ -72,6 +79,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/call"
           element={
