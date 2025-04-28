@@ -6,6 +6,12 @@ import axios from "axios"
 
 const AuthContext = createContext()
 
+// Create axios instance with base URL
+const api = axios.create({
+  baseURL: "https://machine-alert.onrender.com/api",
+  timeout: 10000, // Set timeout to prevent hanging requests
+})
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -23,15 +29,11 @@ export const AuthProvider = ({ children }) => {
           return
         }
 
-        // Set default auth header for all future requests
-        axios.defaults.headers.common["Authorization"] = `Bearer ${token}`
+        // Set token for all requests
+        api.defaults.headers.common["Authorization"] = `Bearer ${token}`
 
         // Fetch current user profile
-        const response = await axios.get("https://machine-alert.onrender.com/api/users/profile", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
+        const response = await api.get("/users/profile")
 
         if (response.data) {
           setUser(response.data)
@@ -49,96 +51,51 @@ export const AuthProvider = ({ children }) => {
     loadUser()
   }, [])
 
-  // Add register function
+  // Register function
   const register = async (license, username, email, password) => {
     try {
-      console.log("Sending registration request with data:", {
+      const response = await api.post("/auth/register", {
         license,
         username,
         email,
-        password: "***" // Don't log actual password
-      })
-      
-      // Using the registration endpoint
-      const response = await axios.post("https://machine-alert.onrender.com/api/auth/register", {
-        license,
-        username,
-        email,
-        password
+        password,
       })
 
-      console.log("Registration successful:", response.data)
-      
       return {
         success: true,
-        data: response.data
+        data: response.data,
       }
     } catch (error) {
       console.error("Registration error:", error)
-      
-      // Detailed error logging
-      if (error.response) {
-        // Server responded with an error status
-        console.error("Registration failed - Server response:", {
-          status: error.response.status,
-          data: error.response.data
-        })
-        
-        return {
-          success: false,
-          message: error.response.data?.error || "Registration failed. Please try again."
-        }
-      } else if (error.request) {
-        // Request was made but no response received
-        console.error("Registration failed - No response received")
-        
-        return {
-          success: false,
-          message: "Network error. Please check your connection and try again."
-        }
-      } else {
-        // Error in setting up the request
-        console.error("Registration failed - Request setup error:", error.message)
-        
-        return {
-          success: false,
-          message: error.message || "Registration failed. Please try again."
-        }
+
+      return {
+        success: false,
+        message: error.response?.data?.error || "Registration failed. Please try again.",
       }
     }
   }
 
+  // Optimized login function
   const login = async (license, password) => {
     try {
-      // Using the correct login endpoint from authRoutes.js
-      const response = await axios.post("https://machine-alert.onrender.com/api/auth/login", {
+      const response = await api.post("/auth/login", {
         license,
-        password
+        password,
       })
 
-      console.log("Login response:", response.data)
-
-      // Extract token from response
-      const { token } = response.data
+      // Extract token and user data
+      const { token, ...userData } = response.data
 
       // Store token in localStorage
       localStorage.setItem("accessToken", token)
 
       // Set default auth header
-      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`
+      api.defaults.headers.common["Authorization"] = `Bearer ${token}`
 
-      // Get user profile with the token
-      const userResponse = await axios.get("https://machine-alert.onrender.com/api/users/profile", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (userResponse.data) {
-        localStorage.setItem("user", JSON.stringify(userResponse.data))
-        setUser(userResponse.data)
-        setIsAuthenticated(true)
-      }
+      // Store user data
+      setUser(userData)
+      setIsAuthenticated(true)
+      localStorage.setItem("user", JSON.stringify(userData))
 
       return { success: true }
     } catch (error) {
@@ -150,14 +107,11 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
+  // Logout function
   const logout = () => {
-    // Clear token and user from localStorage
     localStorage.removeItem("accessToken")
     localStorage.removeItem("user")
-
-    // Remove auth header
-    delete axios.defaults.headers.common["Authorization"]
-
+    delete api.defaults.headers.common["Authorization"]
     setUser(null)
     setIsAuthenticated(false)
     navigate("/login")
@@ -171,7 +125,7 @@ export const AuthProvider = ({ children }) => {
         loading,
         login,
         logout,
-        register, // Add register function to context
+        register,
       }}
     >
       {children}

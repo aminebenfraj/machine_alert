@@ -13,8 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Checkbox } from "@/components/ui/checkbox"
-import { BadgeIcon as IdCard, Lock, Loader2, Info } from "lucide-react"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { BadgeIcon as IdCard, Lock, Loader2 } from "lucide-react"
 
 export default function Login() {
   const navigate = useNavigate()
@@ -22,21 +21,23 @@ export default function Login() {
   const [serverError, setServerError] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
 
+  // Initialize form with default values
   const form = useForm({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       license: "",
       password: "",
     },
-    mode: "onChange", // Enable validation on change
+    mode: "onBlur", // Changed from onChange to onBlur for better performance
   })
 
+  // Optimized submit handler
   const onSubmit = async (data) => {
     setServerError(null)
     setIsLoading(true)
     try {
       const result = await login(data.license, data.password)
-      
+
       if (result.success) {
         navigate("/call")
       } else {
@@ -52,11 +53,11 @@ export default function Login() {
 
   return (
     <section className="flex items-center justify-center h-full min-h-screen bg-gray-100 dark:bg-gray-800">
-      <div className="container p-12">
+      <div className="container p-4 md:p-8">
         <div className="flex items-center justify-center text-gray-900 dark:text-white">
           <div className="flex flex-wrap w-full max-w-4xl overflow-hidden bg-white shadow-xl rounded-2xl dark:bg-gray-700">
             {/* Left Column */}
-            <div className="flex flex-col justify-center w-full p-8 lg:w-6/12">
+            <div className="flex flex-col justify-center w-full p-6 lg:w-6/12">
               <CardHeader className="text-center">
                 <img src="/novares-logo.webp" alt="Novares" className="w-56 mx-auto" />
                 <CardTitle className="mt-4 text-2xl font-semibold text-blue-600">Welcome Back</CardTitle>
@@ -97,23 +98,9 @@ export default function Login() {
                         <FormItem>
                           <div className="flex items-center">
                             <FormLabel className="text-lg text-blue-600">Password</FormLabel>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Info className="w-4 h-4 ml-2 text-blue-500" />
-                                </TooltipTrigger>
-                                <TooltipContent className="p-4 space-y-2 bg-white border border-gray-200 rounded-lg shadow-lg w-80">
-                                  <p className="font-medium text-gray-800">Password must contain:</p>
-                                  <ul className="pl-5 space-y-1 text-sm text-gray-600 list-disc">
-                                    <li>At least 8 characters</li>
-                                    <li>At least one uppercase letter (A-Z)</li>
-                                    <li>At least one lowercase letter (a-z)</li>
-                                    <li>At least one number (0-9)</li>
-                                    <li>At least one special character (!@#$%^&*)</li>
-                                  </ul>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                            <Link href="/forgot-password" className="ml-auto inline-block text-sm underline">
+                              Forgot Password?
+                            </Link>
                           </div>
                           <FormControl>
                             <div className="relative">
@@ -138,11 +125,8 @@ export default function Login() {
                           Remember me
                         </label>
                       </div>
-                      <Link to="/forgot-password" className="text-lg text-blue-600 hover:underline">
-                        Forgot Password?
-                      </Link>
                     </div>
-                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                       <Button
                         type="submit"
                         className="w-full py-4 text-xl text-white rounded-lg bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800"
@@ -161,7 +145,6 @@ export default function Login() {
                   </form>
                 </Form>
 
-                {/* Moved outside the form to prevent form submission */}
                 <p className="mt-6 text-lg text-center text-gray-700">
                   Don't have an account?{" "}
                   <Link to="/register" className="text-blue-600 hover:underline">
