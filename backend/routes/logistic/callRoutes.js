@@ -19,13 +19,12 @@ router.post("/", protect, createCall)
 // Mark a call as completed - protected
 router.put("/:id/complete", protect, completeCall)
 
-// Export calls to CSV - protected
-router.get("/export", protect, exportCalls)
-
 // Manually check and update expired calls - protected
 router.post("/check-expired", protect, checkExpiredCalls)
 
 // Delete a call - protected
 router.delete("/:id", protect, deleteCall)
+router.get("/export", exportCalls)
+
 
 module.exports = router

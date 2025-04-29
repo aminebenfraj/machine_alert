@@ -318,8 +318,9 @@ const CallDashboard = () => {
   const handleExportToExcel = () => {
     // Convert filter values for API
     const apiFilters = { ...filters }
-    if (apiFilters.machineId === "all") apiFilters.machineId = ""
-    if (apiFilters.status === "all") apiFilters.status = ""
+    if (apiFilters.machineId === "all") delete apiFilters.machineId 
+    if (apiFilters.status === "all") delete apiFilters.status 
+    if (!apiFilters.date) delete apiFilters.date 
 
     exportCalls(apiFilters)
   }

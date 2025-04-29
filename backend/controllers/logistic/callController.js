@@ -1,4 +1,83 @@
 const Call = require("../../models/logistic/CallModel")
+const excel = require("exceljs")
+
+exports.exportCallsToExcel = async (req, res) => {
+  try {
+    // Get filter parameters
+    const { machineId, date, status } = req.query
+
+    // Build filter object
+    const filter = {}
+    if (machineId) filter.machineId = machineId
+    if (status) filter.status = status
+    if (date) {
+      // Convert date string to Date object range for the entire day
+      const startDate = new Date(date)
+      startDate.setHours(0, 0, 0, 0)
+
+      const endDate = new Date(date)
+      endDate.setHours(23, 59, 59, 999)
+
+      filter.date = { $gte: startDate, $lte: endDate }
+    }
+
+    // Find calls with filters and populate machine information
+    const calls = await Call.find(filter)
+      .populate({
+        path: "machineId",
+        select: "name",
+        model: Machine,
+      })
+      .sort({ date: -1 })
+
+    // Create a new Excel workbook
+    const workbook = new excel.Workbook()
+    const worksheet = workbook.addWorksheet("Llamadas")
+
+    // Add columns
+    worksheet.columns = [
+      { header: "Nº DE MÁQUINA", key: "machine", width: 20 },
+      { header: "FECHA", key: "date", width: 15 },
+      { header: "HORA LLAMADA", key: "callTime", width: 15 },
+      { header: "ESTATUS", key: "status", width: 15 },
+      { header: "CREADO POR", key: "createdBy", width: 15 },
+      { header: "HORA TAREA TERMINADA", key: "completionTime", width: 20 },
+    ]
+
+    // Style the header row
+    worksheet.getRow(1).font = { bold: true }
+    worksheet.getRow(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFD3D3D3" },
+    }
+
+    // Add rows
+    calls.forEach((call) => {
+      worksheet.addRow({
+        machine: call.machineId ? call.machineId.name : "N/A",
+        date: new Date(call.date).toLocaleDateString(),
+        callTime: new Date(call.callTime).toLocaleTimeString(),
+        status: call.status,
+        createdBy: call.createdBy || "N/A",
+        completionTime: call.completionTime ? new Date(call.completionTime).toLocaleTimeString() : "N/A",
+      })
+    })
+
+    // Set response headers
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    res.setHeader("Content-Disposition", `attachment; filename=llamadas_${new Date().toISOString().split("T")[0]}.xlsx`)
+
+    // Write to response
+    await workbook.xlsx.write(res)
+
+    // End the response
+    res.end()
+  } catch (error) {
+    console.error("Error exporting calls to Excel:", error)
+    res.status(500).json({ message: "Error exporting calls to Excel" })
+  }
+}
 
 // Get all calls with optional filtering
 exports.getCalls = async (req, res) => {
@@ -116,16 +195,12 @@ exports.completeCall = async (req, res) => {
 // Export calls to CSV
 exports.exportCalls = async (req, res) => {
   try {
-    // Check if user is authenticated
-    if (!req.user) {
-      return res.status(401).json({ message: "Not authorized, no token" })
-    }
 
     // Get token from query params for direct browser access
     const { token, ...queryParams } = req.query
     
     const calls = await Call.find(queryParams).populate("machines", "name").sort({ callTime: -1 })
-
+console.log("Calls to export:", calls)
     // Format for CSV
     const csvData = [
       ["Nº DE MÁQUINA", "FECHA", "HORA LLAMADA", "TIEMPO RESTANTE", "ESTATUS", "HORA TAREA TERMINADA"],
