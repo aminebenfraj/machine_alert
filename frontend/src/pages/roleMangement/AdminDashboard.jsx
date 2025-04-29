@@ -85,37 +85,14 @@ const staggerContainer = {
 
 // Role categories for organization based on the backend roles
 const roleCategories = {
-  Management: ["Admin", "Manager", "Project Manager", "Business Manager", "Financial Leader"],
-  Engineering: [
-    "Manufacturing Eng. Manager",
-    "Manufacturing Eng. Leader",
-    "Tooling Manager",
-    "Automation Leader",
-    "SAP Leader",
-    "Methodes UAP1&3",
-    "Methodes UAP2",
-  ],
+  Management: ["Admin",],
   Logistics: [
-    "Logistic Manager",
-    "Logistic Leader UAP1",
-    "Logistic Leader UAP2",
-    "Logistic Leader",
-    "POE Administrator",
-    "Material Administrator",
-    "Warehouse Leader UAP1",
-    "Warehouse Leader UAP2",
     "LOGISTICA",
   ],
-  Production: ["Prod. Plant Manager UAP1", "Prod. Plant Manager UAP2", "PRODUCCION"],
-  Quality: [
-    "Quality Manager",
-    "Quality Leader UAP1",
-    "Quality Leader UAP2",
-    "Quality Leader UAP3",
-    "Laboratory Leader",
-  ],
-  Other: ["Customer", "User", "Maintenance Manager", "Maintenance Leader UAP2", "Purchasing Manager"],
+  Production: ["PRODUCCION"],
+  Other: ["User",],
 }
+
 
 // All roles flattened
 const allRoles = Object.values(roleCategories).flat()
