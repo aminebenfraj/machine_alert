@@ -14,8 +14,8 @@ const ShowMachines = () => {
   const [machines, setMachines] = useState([])
   const { user } = useAuth()
 
-  // Check if user has PRODUCCION or Admin role
-  const canManageMachines = user?.roles?.some((role) => ["Admin", "PRODUCCION"].includes(role))
+  // Check if user has Admin role
+  const canManageMachines = user?.roles?.some((role) => ["Admin"].includes(role))
 
   useEffect(() => {
     fetchMachines()
