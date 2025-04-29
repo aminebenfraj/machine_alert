@@ -232,7 +232,7 @@ const SettingsPage = () => {
               <Card>
                 <CardHeader>
                   <CardTitle>Profile</CardTitle>
-                  <CardDescription>Update your personal information and profile picture.</CardDescription>
+                  <CardDescription>Update your personal information </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleSubmit} className="space-y-6">
@@ -248,13 +248,7 @@ const SettingsPage = () => {
                       </Avatar>
 
                       <div className="flex items-center gap-2">
-                        <Label
-                          htmlFor="picture"
-                          className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md shadow cursor-pointer h-9 bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1"
-                        >
-                          <Upload className="w-4 h-4 mr-2" />
-                          Upload Picture
-                        </Label>
+                        
                         <Input
                           id="picture"
                           type="file"
