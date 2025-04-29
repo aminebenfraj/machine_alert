@@ -38,7 +38,7 @@ export default function MainNav() {
   const handleLogout = async () => {
     try {
       await logout()
-      navigate("/")
+      navigate("/login")
     } catch (error) {
       console.error("Logout failed:", error)
     }
