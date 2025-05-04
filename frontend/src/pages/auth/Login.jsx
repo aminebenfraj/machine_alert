@@ -16,7 +16,7 @@ const Login = () => {
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [loginAttempts, setLoginAttempts] = useState(0)
-  const { login, isAuthenticated, authError } = useAuth()
+  const { login, user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -25,15 +25,12 @@ const Login = () => {
 
   useEffect(() => {
     // Redirect if already authenticated
-    if (isAuthenticated) {
-      navigate(from, { replace: true })
+    if (user) {
+      navigate("/")
     }
 
-    // Set error from auth context if present
-    if (authError) {
-      setError(authError)
-    }
-  }, [isAuthenticated, navigate, from, authError])
+    
+  }, [user])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -55,20 +52,14 @@ const Login = () => {
       }
 
       const result = await login(license, password)
-
-      if (result.success) {
+      
         // Successful login
-        navigate(from, { replace: true })
-      } else {
-        // Failed login
-        setError(result.message || "Login failed. Please check your credentials.")
-        setLoginAttempts((prev) => prev + 1)
-      }
+        navigate("/")
     } catch (err) {
       console.error("Login error:", err)
       setError(err.message || "An unexpected error occurred. Please try again.")
-      setLoginAttempts((prev) => prev + 1)
     } finally {
+      navigate("/")
       setIsLoading(false)
     }
   }

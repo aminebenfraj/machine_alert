@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from "framer-motion"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { registerSchema } from "@/lib/AuthValidation"
-import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -15,10 +14,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
 import { BadgeIcon as IdCard, User, Mail, Lock, Loader2, Info, Eye, EyeOff } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { register } from "@/lib/Auth"
 
 export default function Register() {
   const navigate = useNavigate()
-  const { register } = useAuth()  // Use register from AuthContext (renamed from authRegister)
   const [serverError, setServerError] = useState("")
   const [passwordValue, setPasswordValue] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -51,12 +50,8 @@ export default function Register() {
       // Call register function from AuthContext with proper arguments
       const result = await register(data.license, data.username, data.email, data.password)
       
-      if (result.success) {
-        console.log("Registration successful, redirecting to login page");
+      
         navigate("/login")
-      } else {
-        setServerError(result.message)
-      }
     } catch (error) {
       console.error("Registration failed:", error);
       setServerError(error.message || "Registration failed. Please try again.");

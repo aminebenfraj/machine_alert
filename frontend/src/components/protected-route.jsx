@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext"
 
 // Enhanced ProtectedRoute component with role-based access control
 const ProtectedRoute = ({ children, requiredRoles = [] }) => {
-  const { isAuthenticated, loading, user } = useAuth()
+  const {  loading, user } = useAuth()
 
   // If still loading auth state, show nothing or a loading spinner
   if (loading) {
@@ -13,7 +13,7 @@ const ProtectedRoute = ({ children, requiredRoles = [] }) => {
   }
 
   // If not authenticated, redirect to login
-  if (!isAuthenticated) {
+  if (!user) {
     return <Navigate to="/login" replace />
   }
 
