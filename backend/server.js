@@ -12,8 +12,18 @@ const { initCronJobs } = require("./crone/callStatusCron")
 const app = express()
 const PORT = process.env.PORT || 5000
 
-// Middleware
-app.use(cors())
+// Updated CORS configuration to fix credentials issue
+app.use(cors({
+  origin: [
+    'https://machine-alert-frontend.onrender.com',
+    'http://localhost:3000', // For local development
+    'http://localhost:5173'  // For Vite default port if you're using it
+  ],
+  credentials: true, // This is crucial for allowing cookies/credentials
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}))
+
 app.use(express.json())
 
 // MongoDB Connection
@@ -52,4 +62,4 @@ app.use((req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server is running on port: ${PORT}`)
-})
+})  
