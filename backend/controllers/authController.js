@@ -120,131 +120,34 @@ exports.registerUser = async (req, res) => {
 
 // Login User - Completely rewritten for reliability
 exports.loginUser = async (req, res) => {
-  const { license, password } = req.body
-
-  // Input validation
-  if (!license || !password) {
-    return res.status(400).json({
-      error: "Please provide both license and password",
-    })
-  }
-
   try {
-    // Find user by license with retry mechanism
-    let user = null
-    let retryCount = 0
-    const maxRetries = 2
+    const { license, password } = req.body
+    // Find user by license and select only necessary fields
+    const user = await User.findOne({ license }).select("license username email roles image password")
 
-    while (!user && retryCount <= maxRetries) {
-      try {
-        user = await User.findOne({ license }).select("+password")
-
-        if (!user && retryCount < maxRetries) {
-          // Wait a short time before retrying (exponential backoff)
-          await new Promise((resolve) => setTimeout(resolve, 100 * Math.pow(2, retryCount)))
-          retryCount++
-        } else if (!user) {
-          return res.status(401).json({
-            error: "Invalid credentials",
-            code: "INVALID_CREDENTIALS",
-          })
-        }
-      } catch (dbError) {
-        console.error(`Database error during login (attempt ${retryCount + 1}):`, dbError)
-
-        if (retryCount < maxRetries) {
-          retryCount++
-          // Wait before retry
-          await new Promise((resolve) => setTimeout(resolve, 200 * Math.pow(2, retryCount)))
-        } else {
-          throw dbError // Re-throw after max retries
-        }
-      }
+    if (!user) {
+      return res.status(400).json({ error: "Invalid license or password" })
     }
-
-    // Compare password with retry mechanism for intermittent bcrypt issues
-    let isMatch = false
-    retryCount = 0
-
-    while (retryCount <= maxRetries) {
-      try {
-        isMatch = await bcrypt.compare(password, user.password)
-        break // Exit loop if comparison completes without error
-      } catch (bcryptError) {
-        console.error(`Bcrypt error during login (attempt ${retryCount + 1}):`, bcryptError)
-
-        if (retryCount < maxRetries) {
-          retryCount++
-          // Wait before retry
-          await new Promise((resolve) => setTimeout(resolve, 200 * Math.pow(2, retryCount)))
-        } else {
-          throw bcryptError // Re-throw after max retries
-        }
-      }
-    }
-
+    // Compare password
+    const isMatch = await bcrypt.compare(password, user.password)
     if (!isMatch) {
-      // Use a consistent error message for security (don't reveal if user exists)
-      return res.status(401).json({
-        error: "Invalid credentials",
-        code: "INVALID_CREDENTIALS",
-      })
+      return res.status(400).json({ error: "Invalid license or password" })
     }
-
-    // Generate token with retry mechanism
-    let token = null
-    retryCount = 0
-
-    while (!token && retryCount <= maxRetries) {
-      try {
-        token = generateToken(user)
-      } catch (tokenError) {
-        console.error(`Token generation error (attempt ${retryCount + 1}):`, tokenError)
-
-        if (retryCount < maxRetries) {
-          retryCount++
-          await new Promise((resolve) => setTimeout(resolve, 100 * Math.pow(2, retryCount)))
-        } else {
-          throw tokenError // Re-throw after max retries
-        }
-      }
-    }
-
+    // Generate token
+    const token = jwt.sign({ license: user.license, roles: user.roles }, process.env.JWT_SECRET, { expiresIn: "30d" })
     // Return user data without password
     const userData = {
-      license: user.license,
-      username: user.username,
-      email: user.email,
-      roles: user.roles,
-      image: user.image,
       token,
     }
-
-    // Set token in HTTP-only cookie for added security
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // Only use HTTPS in production
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-      sameSite: "strict",
-    })
-
     res.json(userData)
   } catch (error) {
     console.error("Login error:", error)
+    res.status(500).json({ error: "Server error" })
 
-    // Provide a request ID for tracking in logs
-    const requestId = Date.now().toString(36)
-    console.error(`Login error (request ${requestId}):`, error)
-
-    res.status(500).json({
-      error: "An error occurred during login. Please try again.",
-      requestId,
-      code: "SERVER_ERROR",
-    })
   }
 }
 
-// Get Current User - Enhanced with better error handling
+// Get Current User - Simplified
 exports.currentUser = async (req, res) => {
   try {
     // User is already attached to req by the auth middleware
