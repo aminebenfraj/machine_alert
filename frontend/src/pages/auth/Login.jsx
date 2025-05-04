@@ -1,29 +1,39 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate, useLocation } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../../components/ui/card"
 import { Alert, AlertDescription } from "../../components/ui/alert"
-import { Loader2 } from "lucide-react"
+import { Loader2, AlertCircle } from "lucide-react"
 
 const Login = () => {
-  const [username, setUsername] = useState("")
+  const [license, setLicense] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const { login, isAuthenticated } = useAuth()
+  const [loginAttempts, setLoginAttempts] = useState(0)
+  const { login, isAuthenticated, authError } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // Get the redirect path from location state or default to home
+  const from = location.state?.from?.pathname || "/"
 
   useEffect(() => {
     // Redirect if already authenticated
     if (isAuthenticated) {
-      navigate("/", { replace: true })
+      navigate(from, { replace: true })
     }
-  }, [isAuthenticated, navigate])
+
+    // Set error from auth context if present
+    if (authError) {
+      setError(authError)
+    }
+  }, [isAuthenticated, navigate, from, authError])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -31,13 +41,57 @@ const Login = () => {
     setIsLoading(true)
 
     try {
-      await login(username, password)
-      navigate("/")
+      // Validate input
+      if (!license.trim()) {
+        setError("License is required")
+        setIsLoading(false)
+        return
+      }
+
+      if (!password) {
+        setError("Password is required")
+        setIsLoading(false)
+        return
+      }
+
+      const result = await login(license, password)
+
+      if (result.success) {
+        // Successful login
+        navigate(from, { replace: true })
+      } else {
+        // Failed login
+        setError(result.message || "Login failed. Please check your credentials.")
+        setLoginAttempts((prev) => prev + 1)
+      }
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to login. Please check your credentials.")
+      console.error("Login error:", err)
+      setError(err.message || "An unexpected error occurred. Please try again.")
+      setLoginAttempts((prev) => prev + 1)
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Show a more helpful message after multiple failed attempts
+  const getErrorMessage = () => {
+    if (loginAttempts >= 3) {
+      return (
+        <>
+          {error}
+          <div className="mt-2 text-sm">
+            <p>Having trouble logging in? Try these steps:</p>
+            <ul className="pl-5 mt-1 list-disc">
+              <li>Double-check your license and password</li>
+              <li>Make sure caps lock is off</li>
+              <li>Try clearing your browser cache</li>
+              <li>Contact support if the issue persists</li>
+            </ul>
+          </div>
+        </>
+      )
+    }
+    return error
   }
 
   return (
@@ -50,25 +104,28 @@ const Login = () => {
             </div>
             <CardTitle className="text-2xl font-bold text-center">Login</CardTitle>
             <CardDescription className="text-center">
-              Enter your username and password to access your account
+              Enter your license and password to access your account
             </CardDescription>
           </CardHeader>
           <CardContent>
             {error && (
               <Alert variant="destructive" className="mb-4">
-                <AlertDescription>{error}</AlertDescription>
+                <AlertCircle className="w-4 h-4 mr-2" />
+                <AlertDescription>{getErrorMessage()}</AlertDescription>
               </Alert>
             )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
+                <Label htmlFor="license">License</Label>
                 <Input
-                  id="username"
+                  id="license"
                   type="text"
-                  placeholder="Enter your username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Enter your license"
+                  value={license}
+                  onChange={(e) => setLicense(e.target.value)}
                   required
+                  disabled={isLoading}
+                  className="focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div className="space-y-2">
@@ -80,9 +137,11 @@ const Login = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  disabled={isLoading}
+                  className="focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
                 {isLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Please wait

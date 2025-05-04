@@ -112,7 +112,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-         
 
           {/* Call routes - PRODUCCION can create calls, LOGISTICA can view and complete them */}
           <Route
