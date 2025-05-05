@@ -17,18 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Download,
-  Filter,
-  Loader2,
-  Clock,
-  CheckCircle,
-  XCircle,
-  PhoneCall,
-  RotateCw,
-  Calendar,
-  Info,
-} from "lucide-react"
+import { Download, Filter, Loader2, Clock, CheckCircle, XCircle, PhoneCall, Calendar, Info } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -54,6 +43,11 @@ const CallDashboard = () => {
   // Ref for the interval timer
   const timerRef = useRef(null)
 
+  // Check if user has the LOGISTICA role
+  const isLogistics = user?.roles?.includes("LOGISTICA")
+  // Check if user has the PRODUCCION role
+  const isProduction = user?.roles?.includes("PRODUCCION")
+
   useEffect(() => {
     fetchCalls()
     fetchMachines()
@@ -63,10 +57,22 @@ const CallDashboard = () => {
       updateRemainingTime()
     }, 1000)
 
+    // Set up interval to check expired calls and refresh data every 30 seconds
+    const refreshInterval = setInterval(() => {
+      if (isLogistics) {
+        // Check expired calls in the background (silently)
+        handleCheckExpiredCalls(true)
+      } else {
+        // For non-logistics users, just refresh the calls data
+        fetchCalls(true)
+      }
+    }, 30000) // 30 seconds
+
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
+      clearInterval(refreshInterval)
     }
-  }, [])
+  }, [isLogistics])
 
   const fetchMachines = async () => {
     try {
@@ -110,7 +116,7 @@ const CallDashboard = () => {
 
       // Convert filter values for API
       const apiFilters = { ...filters }
-      if (apiFilters.machineId === "all") delete apiFilters.machineId 
+      if (apiFilters.machineId === "all") delete apiFilters.machineId
       if (apiFilters.status === "all") delete apiFilters.status
       if (!apiFilters.date) delete apiFilters.date
       const callsData = await getCalls(apiFilters)
@@ -285,9 +291,9 @@ const CallDashboard = () => {
     }
   }
 
-  const handleCheckExpiredCalls = async () => {
+  const handleCheckExpiredCalls = async (silent = false) => {
     try {
-      setCheckingExpired(true)
+      if (!silent) setCheckingExpired(true)
 
       // Call the API to check expired calls
       const response = await checkExpiredCalls()
@@ -295,32 +301,36 @@ const CallDashboard = () => {
       // Refresh the calls list
       await fetchCalls(true)
 
-      // Show success toast
-      toast({
-        title: "Verificación completada",
-        description: response.data.message || "Se han verificado las llamadas expiradas",
-        variant: "success",
-      })
+      // Show success toast only if not silent
+      if (!silent) {
+        toast({
+          title: "Verificación completada",
+          description: response.data.message || "Se han verificado las llamadas expiradas",
+          variant: "success",
+        })
+      }
     } catch (error) {
       console.error("Error checking expired calls:", error)
 
-      // Show error toast
-      toast({
-        title: "Error",
-        description: "No se pudieron verificar las llamadas expiradas",
-        variant: "destructive",
-      })
+      // Show error toast only if not silent
+      if (!silent) {
+        toast({
+          title: "Error",
+          description: "No se pudieron verificar las llamadas expiradas",
+          variant: "destructive",
+        })
+      }
     } finally {
-      setCheckingExpired(false)
+      if (!silent) setCheckingExpired(false)
     }
   }
 
   const handleExportToExcel = () => {
     // Convert filter values for API
     const apiFilters = { ...filters }
-    if (apiFilters.machineId === "all") delete apiFilters.machineId 
-    if (apiFilters.status === "all") delete apiFilters.status 
-    if (!apiFilters.date) delete apiFilters.date 
+    if (apiFilters.machineId === "all") delete apiFilters.machineId
+    if (apiFilters.status === "all") delete apiFilters.status
+    if (!apiFilters.date) delete apiFilters.date
 
     exportCalls(apiFilters)
   }
@@ -435,11 +445,6 @@ const CallDashboard = () => {
     return true
   })
 
-  // Check if user has the LOGISTICA role
-  const isLogistics = user?.roles?.includes("LOGISTICA")
-  // Check if user has the PRODUCCION role
-  const isProduction = user?.roles?.includes("PRODUCCION")
-
   // If user is not authenticated or doesn't have either role, show loading or unauthorized message
   if (!user) {
     return (
@@ -488,22 +493,7 @@ const CallDashboard = () => {
           </div>
         </div>
 
-        <div className="flex gap-2">
-          {isLogistics && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="outline" size="icon" onClick={handleCheckExpiredCalls} disabled={checkingExpired}>
-                    {checkingExpired ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Verificar llamadas expiradas</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-        </div>
+        <div className="flex gap-2">{/* Auto-refresh implemented in the background */}</div>
       </div>
 
       <Separator />
@@ -725,7 +715,12 @@ const CallDashboard = () => {
                             <CallTimer remainingTime={call.remainingTime} status={call.status} />
                           </TableCell>
                           <TableCell>
-                            <Badge variant={getStatusBadgeVariant(call.status)}>
+                            <Badge
+                              variant={getStatusBadgeVariant(call.status)}
+                              className={
+                                call.status === "Realizada" ? "bg-green-500 hover:bg-green-600 text-white" : ""
+                              }
+                            >
                               {getStatusIcon(call.status)}
                               {call.status}
                             </Badge>
