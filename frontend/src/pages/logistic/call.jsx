@@ -68,7 +68,7 @@ const CallDashboard = () => {
       updateRemainingTime()
     }, 1000)
 
-    // Set up interval to check expired calls and refresh data every 30 seconds
+    // Set up interval to check expired calls and refresh data every 15 seconds
     const refreshInterval = setInterval(() => {
       if (isLogistics) {
         // Check expired calls in the background (silently)
@@ -77,7 +77,7 @@ const CallDashboard = () => {
         // For non-logistics users, just refresh the calls data
         fetchCalls(true)
       }
-    }, 30000) // 30 seconds
+    }, 15000) // 15 seconds
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
