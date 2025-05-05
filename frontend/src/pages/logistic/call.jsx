@@ -17,7 +17,18 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Download, Filter, Loader2, Clock, CheckCircle, XCircle, PhoneCall, Calendar, Info } from "lucide-react"
+import {
+  Download,
+  Filter,
+  Loader2,
+  Clock,
+  CheckCircle,
+  XCircle,
+  PhoneCall,
+  Calendar,
+  Info,
+  RotateCw,
+} from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -493,7 +504,31 @@ const CallDashboard = () => {
           </div>
         </div>
 
-        <div className="flex gap-2">{/* Auto-refresh implemented in the background */}</div>
+        <div className="flex gap-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={isLogistics ? () => handleCheckExpiredCalls(false) : () => fetchCalls(false)}
+                  disabled={checkingExpired || refreshing}
+                >
+                  {checkingExpired || refreshing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <motion.div whileHover={{ rotate: 180 }} transition={{ duration: 0.3 }}>
+                      <RotateCw className="w-4 h-4" />
+                    </motion.div>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{isLogistics ? "Verificar llamadas expiradas" : "Actualizar datos"}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </div>
 
       <Separator />
