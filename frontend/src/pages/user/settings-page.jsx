@@ -128,51 +128,53 @@ const SettingsPage = () => {
   }
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
+  e.preventDefault();
 
-    if (!validateForm()) return
+  if (!validateForm()) return;
 
-    setSaving(true)
+  setSaving(true);
 
-    try {
-      // Only send fields that have changed
-      const updateData = {}
-      if (formData.username !== user.username) updateData.username = formData.username
-      if (formData.email !== user.email) updateData.email = formData.email
-      if (formData.password) updateData.password = formData.password
-      if (formData.image !== user.image) updateData.image = formData.image
+  try {
+    const updateData = {};
+    if (formData.username !== user.username) updateData.username = formData.username;
+    if (formData.email !== user.email) updateData.email = formData.email;
+    if (formData.password) updateData.password = formData.password;
+    if (formData.image !== user.image) updateData.image = formData.image;
 
-      // Only make the API call if there are changes
-      if (Object.keys(updateData).length > 0) {
-        const result = await updateCurrentUser(updateData)
+    if (Object.keys(updateData).length > 0) {
+      const result = await updateCurrentUser(updateData);
 
-        // Update local user state with the new data
-        setUser((prev) => ({
-          ...prev,
-          ...result,
-        }))
+      setUser((prev) => ({
+        ...prev,
+        ...result,
+      }));
 
-        toast({
-          title: "Profile updated",
-          description: "Your profile has been updated successfully.",
-        })
-      } else {
-        toast({
-          title: "No changes made",
-          description: "No changes were detected in your profile.",
-        })
-      }
-    } catch (err) {
       toast({
-        variant: "destructive",
-        title: "Failed to update profile",
-        description: "Please try again later.",
-      })
-      console.error(err)
-    } finally {
-      setSaving(false)
+        title: "Profile updated",
+        description: "Your profile has been updated successfully.",
+      });
+
+      // Navigate to /call after successful update
+      navigate('/call');
+
+    } else {
+      toast({
+        title: "No changes made",
+        description: "No changes were detected in your profile.",
+      });
     }
+  } catch (err) {
+    toast({
+      variant: "destructive",
+      title: "Failed to update profile",
+      description: "Please try again later.",
+    });
+    console.error(err);
+  } finally {
+    setSaving(false);
   }
+};
+
 
   const handleDeleteAccount = async () => {
     try {
