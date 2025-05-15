@@ -39,6 +39,7 @@ exports.exportCallsToExcel = async (req, res) => {
       { header: "Nº DE MÁQUINA", key: "machine", width: 20 },
       { header: "FECHA", key: "date", width: 15 },
       { header: "HORA LLAMADA", key: "callTime", width: 15 },
+      { header: "DURACIÓN (MIN)", key: "duration", width: 15 },
       { header: "ESTATUS", key: "status", width: 15 },
       { header: "CREADO POR", key: "createdBy", width: 15 },
       { header: "HORA TAREA TERMINADA", key: "completionTime", width: 20 },
@@ -58,6 +59,7 @@ exports.exportCallsToExcel = async (req, res) => {
         machine: call.machineId ? call.machineId.name : "N/A",
         date: new Date(call.date).toLocaleDateString(),
         callTime: new Date(call.callTime).toLocaleTimeString(),
+        duration: call.duration || 90, // Include the duration
         status: call.status,
         createdBy: call.createdBy || "N/A",
         completionTime: call.completionTime ? new Date(call.completionTime).toLocaleTimeString() : "N/A",
@@ -110,7 +112,7 @@ exports.getCalls = async (req, res) => {
   }
 }
 
-// Create a new call
+// Update the createCall function to accept a duration parameter
 exports.createCall = async (req, res) => {
   try {
     // Check if user is authenticated
@@ -118,7 +120,7 @@ exports.createCall = async (req, res) => {
       return res.status(401).json({ message: "Not authorized, no token" })
     }
 
-    const { machineId } = req.body
+    const { machineId, duration } = req.body
 
     if (!machineId) {
       return res.status(400).json({ message: "Machine ID is required" })
@@ -126,10 +128,9 @@ exports.createCall = async (req, res) => {
 
     // Determine the creator role from the user object
     let creatorRole = "PRODUCCION" // Default
-    
+
     if (req.user.roles && Array.isArray(req.user.roles)) {
-      if (req.user.roles.some(role => 
-        role.toUpperCase() === "LOGISTICA" || role.toUpperCase() === "LOGÍSTICA")) {
+      if (req.user.roles.some((role) => role.toUpperCase() === "LOGISTICA" || role.toUpperCase() === "LOGÍSTICA")) {
         creatorRole = "LOGISTICA"
       }
     }
@@ -139,7 +140,8 @@ exports.createCall = async (req, res) => {
       createdBy: creatorRole,
       callTime: new Date(),
       date: new Date(),
-      status: "Pendiente"
+      status: "Pendiente",
+      duration: duration || 90, // Use provided duration or default to 90
     })
 
     const savedCall = await newCall.save()
@@ -165,10 +167,10 @@ exports.completeCall = async (req, res) => {
     }
 
     // Check if the user has the LOGISTICA role
-    const isLogistics = req.user.roles && 
-      Array.isArray(req.user.roles) && 
-      req.user.roles.some(role => 
-        role.toUpperCase() === "LOGISTICA" || role.toUpperCase() === "LOGÍSTICA")
+    const isLogistics =
+      req.user.roles &&
+      Array.isArray(req.user.roles) &&
+      req.user.roles.some((role) => role.toUpperCase() === "LOGISTICA" || role.toUpperCase() === "LOGÍSTICA")
 
     if (!isLogistics) {
       return res.status(403).json({ message: "Only LOGISTICA users can complete calls" })
@@ -192,24 +194,33 @@ exports.completeCall = async (req, res) => {
   }
 }
 
-// Export calls to CSV
+// Update the exportCalls function to include duration in the output
 exports.exportCalls = async (req, res) => {
   try {
-
     // Get token from query params for direct browser access
     const { token, ...queryParams } = req.query
-    
+
     const calls = await Call.find(queryParams).populate("machines", "name").sort({ callTime: -1 })
-console.log("Calls to export:", calls)
+    console.log("Calls to export:", calls)
+
     // Format for CSV
     const csvData = [
-      ["Nº DE MÁQUINA", "FECHA", "HORA LLAMADA", "TIEMPO RESTANTE", "ESTATUS", "HORA TAREA TERMINADA"],
+      [
+        "Nº DE MÁQUINA",
+        "FECHA",
+        "HORA LLAMADA",
+        "DURACIÓN (MIN)",
+        "TIEMPO RESTANTE",
+        "ESTATUS",
+        "HORA TAREA TERMINADA",
+      ],
       ...calls.map((call) => [
         call.machines
           .map((machine) => machine.name)
           .join(", "), // Join machine names if multiple
         new Date(call.date).toLocaleDateString(),
         new Date(call.callTime).toLocaleTimeString(),
+        call.duration || 90, // Include the duration
         formatTime(call.remainingTime),
         call.status,
         call.completionTime ? new Date(call.completionTime).toLocaleTimeString() : "",
@@ -228,7 +239,7 @@ console.log("Calls to export:", calls)
   }
 }
 
-// Check and update expired calls manually
+// Update the checkExpiredCalls function to use the call's duration
 exports.checkExpiredCalls = async (req, res) => {
   try {
     // Check if user is authenticated
@@ -249,7 +260,7 @@ exports.checkExpiredCalls = async (req, res) => {
         const callTime = new Date(call.callTime).getTime()
         const currentTime = new Date().getTime()
         const elapsedSeconds = Math.floor((currentTime - callTime) / 1000)
-        const totalSeconds = 90 * 60 // 90 minutes in seconds
+        const totalSeconds = (call.duration || 90) * 60 // Use the call's duration or default to 90 minutes
         const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds)
 
         // If remaining time is 0, mark as expired
@@ -286,10 +297,10 @@ exports.deleteCall = async (req, res) => {
     const { id } = req.params
 
     // Check if the user has the LOGISTICA role
-    const isLogistics = req.user.roles && 
-      Array.isArray(req.user.roles) && 
-      req.user.roles.some(role => 
-        role.toUpperCase() === "LOGISTICA" || role.toUpperCase() === "LOGÍSTICA")
+    const isLogistics =
+      req.user.roles &&
+      Array.isArray(req.user.roles) &&
+      req.user.roles.some((role) => role.toUpperCase() === "LOGISTICA" || role.toUpperCase() === "LOGÍSTICA")
 
     if (!isLogistics) {
       return res.status(403).json({ message: "Only LOGISTICA users can delete calls" })

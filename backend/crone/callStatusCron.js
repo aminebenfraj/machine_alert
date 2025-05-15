@@ -1,7 +1,7 @@
 const cron = require("node-cron")
 const Call = require("../models/logistic/CallModel")
 
-// Function to update expired calls
+// Update the updateExpiredCalls function to use the call's duration
 const updateExpiredCalls = async () => {
   try {
     console.log("🕒 Running scheduled task: Checking for expired calls...")
@@ -11,11 +11,18 @@ const updateExpiredCalls = async () => {
 
     let updatedCount = 0
 
-    // Check each call's remaining time
+    // Check each call's remaining time using the call's duration
     for (const call of pendingCalls) {
       try {
+        // Calculate remaining time
+        const callTime = new Date(call.callTime).getTime()
+        const currentTime = new Date().getTime()
+        const elapsedSeconds = Math.floor((currentTime - callTime) / 1000)
+        const totalSeconds = (call.duration || 90) * 60 // Use the call's duration or default to 90 minutes
+        const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds)
+
         // If remaining time is 0, mark as expired
-        if (call.remainingTime <= 0) {
+        if (remainingSeconds <= 0) {
           // Don't modify the createdBy field to avoid validation errors
           call.status = "Expirada"
           call.completionTime = new Date()
@@ -41,4 +48,3 @@ const initCronJobs = () => {
 }
 
 module.exports = { initCronJobs }
-

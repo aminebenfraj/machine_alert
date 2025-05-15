@@ -37,6 +37,7 @@ const CallDashboard = () => {
   const { user } = useAuth()
 
   const [selectedMachine, setSelectedMachine] = useState(null)
+  const [callDuration, setCallDuration] = useState(90) // Default duration is 90 minutes
   const [machines, setMachines] = useState([])
   const [calls, setCalls] = useState([])
   const [loading, setLoading] = useState(true)
@@ -183,13 +184,14 @@ const CallDashboard = () => {
       // Find the selected machine to get its name
       const selectedMachineObj = machines.find((m) => m._id === selectedMachine)
 
-      // Create a new call with the machine ID, current date, and user
+      // Create a new call with the machine ID, current date, user, and duration
       const callData = {
         machineId: selectedMachine,
         callTime: new Date(),
         date: new Date(),
         status: "Pendiente",
         createdBy: user?.roles?.includes("PRODUCCION") ? "PRODUCCION" : "LOGISTICA",
+        duration: Number.parseInt(callDuration) || 90, // Use the input duration or default to 90
       }
 
       console.log("Call data:", callData)
@@ -202,13 +204,13 @@ const CallDashboard = () => {
 
         // Ensure the new call has a remainingTime property
         if (!newCall.remainingTime && newCall.remainingTime !== 0) {
-          newCall.remainingTime = 90 * 60 // 90 minutes in seconds
+          newCall.remainingTime = (newCall.duration || 90) * 60 // Use call's duration in seconds
         }
       } else {
         newCall = {
           _id: Date.now().toString(), // Fallback ID if not provided by API
           ...callData,
-          remainingTime: 90 * 60, // 90 minutes in seconds
+          remainingTime: (callData.duration || 90) * 60, // Use call's duration in seconds
           machines: [{ name: selectedMachineObj?.name || "Máquina seleccionada" }],
         }
       }
@@ -242,6 +244,12 @@ const CallDashboard = () => {
   const handleMachineSelect = (machineId) => {
     console.log("Machine selected:", machineId)
     setSelectedMachine(machineId)
+  }
+
+  const handleDurationChange = (e) => {
+    // Ensure the duration is a positive number
+    const value = Number.parseInt(e.target.value) || 90
+    setCallDuration(Math.max(1, value))
   }
 
   const handleCompleteCall = async (id) => {
@@ -572,6 +580,20 @@ const CallDashboard = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+                </div>
+
+                <div className="flex-1">
+                  <Label htmlFor="durationInput">Duración (minutos)</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      id="durationInput"
+                      type="number"
+                      min="1"
+                      value={callDuration}
+                      onChange={handleDurationChange}
+                      className="flex-1"
+                    />
                     <Button
                       onClick={handleCallLogistics}
                       disabled={!selectedMachine || creatingCall}
@@ -709,6 +731,7 @@ const CallDashboard = () => {
                     <TableHead className="font-bold">Nº DE MÁQUINA</TableHead>
                     <TableHead className="font-bold">FECHA</TableHead>
                     <TableHead className="font-bold">HORA LLAMADA</TableHead>
+                    <TableHead className="font-bold">DURACIÓN (MIN)</TableHead>
                     <TableHead className="font-bold">TIEMPO RESTANTE</TableHead>
                     <TableHead className="font-bold">ESTATUS</TableHead>
                     <TableHead className="font-bold">ACCIÓN</TableHead>
@@ -719,7 +742,7 @@ const CallDashboard = () => {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center">
+                      <TableCell colSpan={9} className="h-24 text-center">
                         <div className="flex items-center justify-center">
                           <Loader2 className="w-6 h-6 mr-2 animate-spin" />
                           <span>Cargando...</span>
@@ -728,7 +751,7 @@ const CallDashboard = () => {
                     </TableRow>
                   ) : filteredCalls.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                      <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                         No hay llamadas registradas
                       </TableCell>
                     </TableRow>
@@ -746,8 +769,13 @@ const CallDashboard = () => {
                           <TableCell className="font-medium">{getMachineNames(call)}</TableCell>
                           <TableCell>{new Date(call.date).toLocaleDateString()}</TableCell>
                           <TableCell>{new Date(call.callTime).toLocaleTimeString()}</TableCell>
+                          <TableCell>{call.duration || 90}</TableCell>
                           <TableCell>
-                            <CallTimer remainingTime={call.remainingTime} status={call.status} />
+                            <CallTimer
+                              remainingTime={call.remainingTime}
+                              status={call.status}
+                              duration={call.duration || 90}
+                            />
                           </TableCell>
                           <TableCell>
                             <Badge

@@ -5,21 +5,27 @@ import { motion } from "framer-motion"
 import { Clock, AlertTriangle } from "lucide-react"
 import { formatTime, calculateProgress } from "../apis/logistic/callApi"
 
-export const CallTimer = ({ remainingTime, status }) => {
-  const [progress, setProgress] = useState(calculateProgress(remainingTime))
+export const CallTimer = ({ remainingTime, status, duration = 90 }) => {
+  const [progress, setProgress] = useState(calculateProgress(remainingTime, duration))
 
   useEffect(() => {
-    setProgress(calculateProgress(remainingTime))
-  }, [remainingTime])
+    setProgress(calculateProgress(remainingTime, duration))
+  }, [remainingTime, duration])
 
   if (status !== "Pendiente") {
     return <span className="text-muted-foreground">0:00</span>
   }
 
-  // Determine color based on remaining time segments of the 90-minute timer
+  // Determine color based on remaining time segments of the timer
   const getTimerColors = (time) => {
-    if (time <= 15 * 60) {
-      // Critical: Less than 15 minutes
+    // Calculate percentages based on the total duration
+    const totalSeconds = duration * 60
+    const criticalThreshold = totalSeconds * 0.167 // 1/6 of total time (15min of 90min)
+    const warningThreshold = totalSeconds * 0.333 // 1/3 of total time (30min of 90min)
+    const cautionThreshold = totalSeconds * 0.667 // 2/3 of total time (60min of 90min)
+
+    if (time <= criticalThreshold) {
+      // Critical: Less than 1/6 of total time
       return {
         bg: "bg-red-100",
         bar: "bg-red-600",
@@ -27,8 +33,8 @@ export const CallTimer = ({ remainingTime, status }) => {
         shadow: "shadow-red-500/50",
         pulse: true,
       }
-    } else if (time <= 30 * 60) {
-      // Warning: Less than 30 minutes
+    } else if (time <= warningThreshold) {
+      // Warning: Less than 1/3 of total time
       return {
         bg: "bg-amber-100",
         bar: "bg-amber-500",
@@ -36,8 +42,8 @@ export const CallTimer = ({ remainingTime, status }) => {
         shadow: "shadow-amber-500/50",
         pulse: false,
       }
-    } else if (time <= 60 * 60) {
-      // Caution: Less than 60 minutes
+    } else if (time <= cautionThreshold) {
+      // Caution: Less than 2/3 of total time
       return {
         bg: "bg-blue-100",
         bar: "bg-blue-500",
@@ -46,7 +52,7 @@ export const CallTimer = ({ remainingTime, status }) => {
         pulse: false,
       }
     } else {
-      // Normal: More than 60 minutes
+      // Normal: More than 2/3 of total time
       return {
         bg: "bg-green-100",
         bar: "bg-green-500",
@@ -62,9 +68,9 @@ export const CallTimer = ({ remainingTime, status }) => {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        {remainingTime <= 15 * 60 ? (
+        {remainingTime <= duration * 60 * 0.167 ? (
           <AlertTriangle className="w-4 h-4 text-red-500 animate-pulse" />
-        ) : remainingTime <= 30 * 60 ? (
+        ) : remainingTime <= duration * 60 * 0.333 ? (
           <Clock className="w-4 h-4 text-amber-500" />
         ) : (
           <Clock className="w-4 h-4 text-blue-500" />
