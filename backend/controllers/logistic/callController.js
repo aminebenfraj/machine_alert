@@ -1,5 +1,7 @@
 const Call = require("../../models/logistic/CallModel")
+const Machine = require("../../models/gestionStockModels/MachineModel") // Add this import
 const excel = require("exceljs")
+const { sendCallCreationEmail } = require("../../utils/emailService")
 
 exports.exportCallsToExcel = async (req, res) => {
   try {
@@ -112,7 +114,7 @@ exports.getCalls = async (req, res) => {
   }
 }
 
-// Update the createCall function to accept a duration parameter
+// Update the createCall function to send email notifications
 exports.createCall = async (req, res) => {
   try {
     // Check if user is authenticated
@@ -145,6 +147,18 @@ exports.createCall = async (req, res) => {
     })
 
     const savedCall = await newCall.save()
+
+    // Get machine details for the email
+    const machine = await Machine.findById(machineId)
+    const machineName = machine ? machine.name : "Unknown Machine"
+
+    // Send email notification to LOGISTICA users
+    try {
+      await sendCallCreationEmail(savedCall, machineName)
+    } catch (emailError) {
+      console.error("Failed to send email notification:", emailError)
+      // Continue with the response even if email fails
+    }
 
     // Populate the machine details before returning
     const populatedCall = await Call.findById(savedCall._id).populate("machines", "name description status")

@@ -1,256 +1,878 @@
 "use client"
-
+import { Trash2 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
-import { Link } from "react-router-dom"
-import { Bell, Clock, AlertTriangle, CheckCircle, Calendar } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { getCalls, createCall, completeCall, checkExpiredCalls, exportCalls, deleteCall } from "@/apis/logistic/callApi"
+import { getAllMachines } from "@/apis/gestionStockApi/machineApi"
+import { useAuth } from "@/context/AuthContext"
+import { CallTimer } from "@/components/CallTimer"
+import { CallStats } from "@/components/CallStats"
+// Add this import at the top of the file
+import CallNotification from "@/components/CallNotification"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Separator } from "@/components/ui/separator"
-import { getCalls, formatTime, completeCall } from "../apis/logistic/callApi"
-import { motion } from "framer-motion"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Download,
+  Filter,
+  Loader2,
+  Clock,
+  CheckCircle,
+  XCircle,
+  PhoneCall,
+  Calendar,
+  Info,
+  RotateCw,
+} from "lucide-react"
+import { toast } from "@/hooks/use-toast"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
-export const CallNotifications = ({ count: externalCount }) => {
-  const [pendingCalls, setPendingCalls] = useState([])
+const CallDashboard = () => {
+  // Get the current user from auth context
+  const { user } = useAuth()
+
+  const [selectedMachine, setSelectedMachine] = useState(null)
+  const [callDuration, setCallDuration] = useState(90) // Default duration is 90 minutes
+  const [machines, setMachines] = useState([])
+  const [calls, setCalls] = useState([])
   const [loading, setLoading] = useState(true)
-  const [open, setOpen] = useState(false)
-  const intervalRef = useRef(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [creatingCall, setCreatingCall] = useState(false)
+  const [checkingExpired, setCheckingExpired] = useState(false)
+  const [completingCall, setCompletingCall] = useState({})
+  const [activeTab, setActiveTab] = useState("all")
+  const [filters, setFilters] = useState({
+    machineId: "all",
+    date: "",
+    status: "all",
+  })
+  // Add this state inside the component
+  const [emailNotification, setEmailNotification] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  })
 
-  const fetchCalls = async () => {
-    try {
-      setLoading(true)
-      const calls = await getCalls({ status: "Pendiente" })
+  // Ref for the interval timer
+  const timerRef = useRef(null)
 
-      // Ensure we have an array of calls
-      const callsArray = Array.isArray(calls) ? calls : calls?.data ? (Array.isArray(calls.data) ? calls.data : []) : []
-
-      // Sort calls by remaining time (ascending)
-      const sortedCalls = callsArray.sort((a, b) => {
-        const aTime = a.remainingTime || 0
-        const bTime = b.remainingTime || 0
-        return aTime - bTime
-      })
-
-      setPendingCalls(sortedCalls)
-    } catch (error) {
-      console.error("Failed to fetch pending calls:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Check if user has the LOGISTICA role
+  const isLogistics = user?.roles?.includes("LOGISTICA")
+  // Check if user has the PRODUCCION role
+  const isProduction = user?.roles?.includes("PRODUCCION")
 
   useEffect(() => {
-    // If popover is open, fetch calls immediately
-    if (open) {
-      fetchCalls()
+    fetchCalls()
+    fetchMachines()
 
-      // Set up interval to refresh calls every 10 seconds when popover is open
-      intervalRef.current = setInterval(fetchCalls, 10000)
-    }
+    // Set up interval to update remaining time every second
+    timerRef.current = setInterval(() => {
+      updateRemainingTime()
+    }, 1000)
 
-    // Clean up interval when popover closes
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
+    // Set up interval to check expired calls and refresh data every 15 seconds
+    const refreshInterval = setInterval(() => {
+      if (isLogistics) {
+        // Check expired calls in the background (silently)
+        handleCheckExpiredCalls(true)
+      } else {
+        // For non-logistics users, just refresh the calls data
+        fetchCalls(true)
       }
-    }
-  }, [open])
+    }, 15000) // 15 seconds
 
-  // Handle call completion
-  const handleCompleteCall = async (id, e) => {
-    e.preventDefault()
-    e.stopPropagation()
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+      clearInterval(refreshInterval)
+    }
+  }, [isLogistics])
+
+  const fetchMachines = async () => {
+    try {
+      console.log("Fetching machines...")
+      const response = await getAllMachines()
+      console.log("Machines response:", response)
+
+      // Check if response is directly an array (not wrapped in a data property)
+      if (Array.isArray(response)) {
+        console.log("Machines data is directly an array:", response)
+
+        // Only show active machines in the dropdown
+        const activeMachines = response.filter((machine) => machine.status === "active")
+        console.log("Active machines:", activeMachines)
+
+        setMachines(activeMachines)
+      }
+      // Check if response has a data property that is an array
+      else if (response && response.data && Array.isArray(response.data)) {
+        console.log("Machines data in response.data:", response.data)
+
+        // Only show active machines in the dropdown
+        const activeMachines = response.data.filter((machine) => machine.status === "active")
+        console.log("Active machines:", activeMachines)
+
+        setMachines(activeMachines)
+      } else {
+        console.warn("No valid machines data found in response")
+        setMachines([])
+      }
+    } catch (error) {
+      console.error("Error fetching machines:", error)
+      setMachines([])
+    }
+  }
+
+  const fetchCalls = async (silent = false) => {
+    try {
+      if (!silent) setLoading(true)
+      if (silent) setRefreshing(true)
+
+      // Convert filter values for API
+      const apiFilters = { ...filters }
+      if (apiFilters.machineId === "all") delete apiFilters.machineId
+      if (apiFilters.status === "all") delete apiFilters.status
+      if (!apiFilters.date) delete apiFilters.date
+      const callsData = await getCalls(apiFilters)
+      setCalls(callsData)
+    } catch (error) {
+      console.error("Error fetching calls:", error)
+      setCalls([])
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }
+
+  // Update the remaining time for all calls
+  const updateRemainingTime = () => {
+    setCalls((prevCalls) => {
+      return prevCalls.map((call) => {
+        if (call.status === "Pendiente") {
+          // If timer has reached zero
+          if (call.remainingTime <= 1) {
+            return {
+              ...call,
+              status: "Expirada",
+              remainingTime: 0,
+            }
+          }
+
+          // Otherwise, decrement the timer
+          return {
+            ...call,
+            remainingTime: call.remainingTime - 1,
+          }
+        }
+        return call
+      })
+    })
+  }
+
+  // Update the handleCallLogistics function to show email notification
+  const handleCallLogistics = async () => {
+    if (!selectedMachine) {
+      toast({
+        title: "Error",
+        description: "Por favor selecciona una máquina",
+        variant: "destructive",
+      })
+      return
+    }
 
     try {
-      await completeCall(id)
-      // Refresh calls after completion
+      setCreatingCall(true)
+      console.log("Creating call for machine:", selectedMachine)
+
+      // Find the selected machine to get its name
+      const selectedMachineObj = machines.find((m) => m._id === selectedMachine)
+
+      // Create a new call with the machine ID, current date, user, and duration
+      const callData = {
+        machineId: selectedMachine,
+        callTime: new Date(),
+        date: new Date(),
+        status: "Pendiente",
+        createdBy: user?.roles?.includes("PRODUCCION") ? "PRODUCCION" : "LOGISTICA",
+        duration: Number.parseInt(callDuration) || 90, // Use the input duration or default to 90
+      }
+
+      console.log("Call data:", callData)
+      const response = await createCall(callData)
+
+      // Get the created call data
+      let newCall
+      if (response && response.data) {
+        newCall = response.data
+
+        // Ensure the new call has a remainingTime property
+        if (!newCall.remainingTime && newCall.remainingTime !== 0) {
+          newCall.remainingTime = (newCall.duration || 90) * 60 // Use call's duration in seconds
+        }
+      } else {
+        newCall = {
+          _id: Date.now().toString(), // Fallback ID if not provided by API
+          ...callData,
+          remainingTime: (callData.duration || 90) * 60, // Use call's duration in seconds
+          machines: [{ name: selectedMachineObj?.name || "Máquina seleccionada" }],
+        }
+      }
+
+      // Add the new call to the calls array
+      setCalls((prevCalls) => [newCall, ...prevCalls])
+
+      // Reset the selected machine
+      setSelectedMachine(null)
+
+      // Show success toast
+      toast({
+        title: "Llamada creada",
+        description: "Se ha creado una llamada a LOGISTICA exitosamente",
+        variant: "success",
+      })
+
+      // Show email notification
+      setEmailNotification({
+        show: true,
+        message: "Se ha enviado una notificación por correo electrónico a los usuarios de LOGISTICA",
+        type: "success",
+      })
+    } catch (error) {
+      console.error("Error creating call:", error)
+
+      // Show error toast
+      toast({
+        title: "Error",
+        description: "No se pudo crear la llamada a LOGISTICA",
+        variant: "destructive",
+      })
+
+      // Show email error notification if applicable
+      if (error.response?.data?.emailError) {
+        setEmailNotification({
+          show: true,
+          message: "No se pudo enviar la notificación por correo electrónico",
+          type: "error",
+        })
+      }
+    } finally {
+      setCreatingCall(false)
+    }
+  }
+
+  const handleMachineSelect = (machineId) => {
+    console.log("Machine selected:", machineId)
+    setSelectedMachine(machineId)
+  }
+
+  const handleDurationChange = (e) => {
+    // Ensure the duration is a positive number
+    const value = Number.parseInt(e.target.value) || 90
+    setCallDuration(Math.max(1, value))
+  }
+
+  const handleCompleteCall = async (id) => {
+    try {
+      // Set loading state for this specific call
+      setCompletingCall((prev) => ({ ...prev, [id]: true }))
+
+      // Get the current time for completion
+      const completionTime = new Date()
+
+      // Get the user role from the auth context
+      const userRole = user?.roles?.includes("LOGISTICA") ? "LOGISTICA" : "PRODUCCION"
+
+      // Call the API to update the server FIRST
+      // Pass the user role to ensure proper authorization
+      await completeCall(id, userRole)
+
+      // Then update the local state after successful API call
+      setCalls((prevCalls) =>
+        prevCalls.map((call) =>
+          call._id === id
+            ? {
+                ...call,
+                status: "Realizada",
+                completionTime: completionTime,
+                remainingTime: 0, // Explicitly set remaining time to 0
+              }
+            : call,
+        ),
+      )
+
+      // Show success toast
+      toast({
+        title: "Llamada completada",
+        description: "La llamada ha sido marcada como completada",
+        variant: "success",
+      })
+    } catch (error) {
+      console.error("Error completing call:", error)
+
+      // Show error toast with more specific message
+      const errorMessage = error.response?.data?.message || "No se pudo completar la llamada"
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+
+      // Refresh calls to ensure UI is in sync with server
+      fetchCalls(true)
+    } finally {
+      // Clear loading state for this call
+      setCompletingCall((prev) => {
+        const newState = { ...prev }
+        delete newState[id]
+        return newState
+      })
+    }
+  }
+
+  const handleCheckExpiredCalls = async (silent = false) => {
+    try {
+      if (!silent) setCheckingExpired(true)
+
+      // Call the API to check expired calls
+      const response = await checkExpiredCalls()
+
+      // Refresh the calls list
+      await fetchCalls(true)
+
+      // Show success toast only if not silent
+      if (!silent) {
+        toast({
+          title: "Verificación completada",
+          description: response.data.message || "Se han verificado las llamadas expiradas",
+          variant: "success",
+        })
+      }
+    } catch (error) {
+      console.error("Error checking expired calls:", error)
+
+      // Show error toast only if not silent
+      if (!silent) {
+        toast({
+          title: "Error",
+          description: "No se pudieron verificar las llamadas expiradas",
+          variant: "destructive",
+        })
+      }
+    } finally {
+      if (!silent) setCheckingExpired(false)
+    }
+  }
+
+  const handleExportToExcel = () => {
+    // Convert filter values for API
+    const apiFilters = { ...filters }
+    if (apiFilters.machineId === "all") delete apiFilters.machineId
+    if (apiFilters.status === "all") delete apiFilters.status
+    if (!apiFilters.date) delete apiFilters.date
+
+    exportCalls(apiFilters)
+  }
+
+  const handleFilterChange = (name, value) => {
+    setFilters((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const applyFilters = () => {
+    fetchCalls()
+  }
+
+  // Get machine names for display
+  const getMachineNames = (call) => {
+    if (!call.machines || call.machines.length === 0) return "-"
+    return call.machines.map((machine) => machine.name).join(", ")
+  }
+
+  // Get status badge variant
+  const getStatusBadgeVariant = (status) => {
+    switch (status) {
+      case "Realizada":
+        return "success"
+      case "Expirada":
+        return "destructive"
+      case "Pendiente":
+        return "secondary"
+      default:
+        return "outline"
+    }
+  }
+  const handleDeleteCall = async (id) => {
+    const confirm = window.confirm("¿Estás seguro de que quieres eliminar esta llamada?")
+    if (!confirm) return
+
+    try {
+      await deleteCall(id)
+      toast({
+        title: "Llamada eliminada",
+        description: "La llamada ha sido eliminada correctamente",
+        variant: "success",
+      })
+      fetchCalls() // Refresh the list after deletion
+    } catch (error) {
+      console.error("Error al eliminar la llamada:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la llamada",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteAllExceptFirst10 = async () => {
+    const confirm = window.confirm("¿Estás seguro de que quieres eliminar todas las llamadas excepto las primeras 10?")
+    if (!confirm) return
+
+    try {
+      // Get all calls except the first 10
+      const callsToDelete = calls.slice(10)
+
+      // Show loading toast
+      toast({
+        title: "Eliminando llamadas",
+        description: `Eliminando ${callsToDelete.length} llamadas...`,
+        variant: "default",
+      })
+
+      // Delete each call
+      let deletedCount = 0
+      for (const call of callsToDelete) {
+        try {
+          await deleteCall(call._id)
+          deletedCount++
+        } catch (error) {
+          console.error(`Error al eliminar la llamada ${call._id}:`, error)
+        }
+      }
+
+      // Show success toast
+      toast({
+        title: "Llamadas eliminadas",
+        description: `Se han eliminado ${deletedCount} llamadas correctamente`,
+        variant: "success",
+      })
+
+      // Refresh the calls list
       fetchCalls()
     } catch (error) {
-      console.error(`Failed to complete call ${id}:`, error)
+      console.error("Error al eliminar las llamadas:", error)
+
+      // Show error toast
+      toast({
+        title: "Error",
+        description: "Ocurrió un error al eliminar las llamadas",
+        variant: "destructive",
+      })
+    }
+  }
+  // Get status icon
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case "Realizada":
+        return <CheckCircle className="w-3 h-3 mr-1" />
+      case "Expirada":
+        return <XCircle className="w-3 h-3 mr-1" />
+      case "Pendiente":
+        return <Clock className="w-3 h-3 mr-1" />
+      default:
+        return null
     }
   }
 
-  // Get urgency class based on remaining time
-  const getUrgencyClass = (remainingTime) => {
-    if (remainingTime === undefined || remainingTime === null) return ""
-    if (remainingTime <= 300) return "bg-rose-50 border-rose-200" // Less than 5 minutes
-    if (remainingTime <= 900) return "bg-amber-50 border-amber-200" // Less than 15 minutes
-    return "bg-slate-50 border-slate-200" // More than 15 minutes
+  // Filter calls based on active tab
+  const filteredCalls = calls.filter((call) => {
+    if (activeTab === "all") return true
+    if (activeTab === "pending") return call.status === "Pendiente"
+    if (activeTab === "completed") return call.status === "Realizada"
+    if (activeTab === "expired") return call.status === "Expirada"
+    return true
+  })
+
+  // If user is not authenticated or doesn't have either role, show loading or unauthorized message
+  if (!user) {
+    return (
+      <div className="container py-6 mx-auto flex items-center justify-center h-[80vh]">
+        <Loader2 className="w-8 h-8 mr-2 animate-spin" />
+        <span>Cargando información de usuario...</span>
+      </div>
+    )
   }
 
-  // Get urgency icon based on remaining time
-  const getUrgencyIcon = (remainingTime) => {
-    if (remainingTime === undefined || remainingTime === null) {
-      return <Clock className="w-4 h-4 text-slate-500" />
-    }
-    if (remainingTime <= 300) {
-      return <AlertTriangle className="w-4 h-4 text-rose-500" />
-    }
-    if (remainingTime <= 900) {
-      return <Clock className="w-4 h-4 text-amber-500" />
-    }
-    return <Clock className="w-4 h-4 text-slate-500" />
+  if (!isLogistics && !isProduction) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="container py-6 mx-auto"
+      >
+        <h1 className="text-3xl font-bold tracking-tight text-center">Acceso no autorizado</h1>
+        <p className="mt-4 text-center">No tienes permisos para acceder a este módulo. Contacta al administrador.</p>
+      </motion.div>
+    )
   }
-
-  // Get progress bar color based on remaining time
-  const getProgressColor = (remainingTime) => {
-    if (remainingTime === undefined || remainingTime === null) return "bg-slate-300"
-    if (remainingTime <= 300) return "bg-rose-500" // Less than 5 minutes
-    if (remainingTime <= 900) return "bg-amber-500" // Less than 15 minutes
-    return "bg-slate-500" // More than 15 minutes
-  }
-
-  // Calculate progress percentage for progress bar
-  const calculateProgress = (remainingTime) => {
-    if (remainingTime === undefined || remainingTime === null) return 100
-    // Assuming 90 minutes (5400 seconds) is the max time
-    const maxTime = 90 * 60
-    const progress = Math.max(0, Math.min(100, (remainingTime / maxTime) * 100))
-    return progress
-  }
-
-  // Get count of pending calls
-  const pendingCount = externalCount !== undefined ? externalCount : pendingCalls.length
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="w-5 h-5" />
-          {pendingCount > 0 && (
-            <Badge
-              className="absolute -top-1 -right-1 px-1.5 py-0.5 min-w-[1.25rem] h-5 flex items-center justify-center bg-rose-500 text-white"
-              variant="secondary"
-            >
-              {pendingCount > 99 ? "99+" : pendingCount}
-            </Badge>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="p-0 shadow-lg w-80" align="end">
-        <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h3 className="font-medium">Call Notifications</h3>
-          {pendingCount > 0 && (
-            <Badge variant="outline" className="bg-slate-100">
-              {pendingCount} Pending
-            </Badge>
-          )}
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+      className="container py-6 mx-auto space-y-6"
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Panel de Control</h1>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center">
+              Usuario:{" "}
+              <Badge variant="outline" className="ml-1 font-mono">
+                {isProduction ? "PRODUCCION" : "LOGISTICA"}
+              </Badge>
+            </div>
+            <div className="flex items-center">
+              <Calendar className="w-4 h-4 mr-1" />
+              {new Date().toLocaleDateString()}
+            </div>
+          </div>
         </div>
 
-        {loading ? (
-          <div className="flex flex-col p-4 space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-full bg-slate-100 animate-pulse"></div>
-                <div className="flex-1 space-y-2">
-                  <div className="w-3/4 h-4 rounded bg-slate-100 animate-pulse"></div>
-                  <div className="w-1/2 h-3 rounded bg-slate-100 animate-pulse"></div>
+        <div className="flex gap-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={isLogistics ? () => handleCheckExpiredCalls(false) : () => fetchCalls(false)}
+                  disabled={checkingExpired || refreshing}
+                >
+                  {checkingExpired || refreshing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <motion.div whileHover={{ rotate: 180 }} transition={{ duration: 0.3 }}>
+                      <RotateCw className="w-4 h-4" />
+                    </motion.div>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{isLogistics ? "Verificar llamadas expiradas" : "Actualizar datos"}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Statistics Cards */}
+      <CallStats calls={calls} />
+
+      {isProduction && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle>Llamar a LOGISTICA</CardTitle>
+              <CardDescription>Selecciona una máquina para crear una llamada a LOGISTICA</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
+                <div className="flex-1">
+                  <Label htmlFor="machineSelect">Seleccionar máquina</Label>
+                  <div className="flex gap-2 mt-1">
+                    <div className="flex-1">
+                      <Select value={selectedMachine || ""} onValueChange={handleMachineSelect}>
+                        <SelectTrigger id="machineSelect">
+                          <SelectValue placeholder="Seleccionar máquina" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {machines && machines.length > 0 ? (
+                            machines.map((machine) => (
+                              <SelectItem key={machine._id} value={machine._id}>
+                                {machine.name} {machine.status !== "active" && `(${machine.status})`}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="no-machines" disabled>
+                              No hay máquinas disponibles
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1">
+                  <Label htmlFor="durationInput">Duración (minutos)</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      id="durationInput"
+                      type="number"
+                      min="1"
+                      value={callDuration}
+                      onChange={handleDurationChange}
+                      className="flex-1"
+                    />
+                    <Button
+                      onClick={handleCallLogistics}
+                      disabled={!selectedMachine || creatingCall}
+                      className="flex items-center gap-2"
+                    >
+                      {creatingCall ? <Loader2 className="w-4 h-4 animate-spin" /> : <PhoneCall className="w-4 h-4" />}
+                      Llamar
+                    </Button>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        ) : pendingCalls.length === 0 ? (
-          <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
-            <div className="flex items-center justify-center w-12 h-12 mb-3 rounded-full bg-slate-100">
-              <Bell className="w-6 h-6 text-slate-400" />
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.2 }}
+      >
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle>Registro de Llamadas</CardTitle>
+            <div className="flex gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleExportToExcel}
+                        className="flex items-center gap-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        Exportar
+                      </Button>
+                    </motion.div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Exportar datos a CSV</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDeleteAllExceptFirst10}
+                        className="flex items-center gap-2 mr-2"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Eliminar excepto 10
+                      </Button>
+                    </motion.div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Eliminar todas las llamadas excepto las primeras 10</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
-            <p className="text-sm text-slate-600">No pending calls</p>
-          </div>
-        ) : (
-          <ScrollArea className="max-h-[320px]">
-            <div className="flex flex-col p-2 space-y-2">
-              {pendingCalls.map((call) => (
-                <motion.div
-                  key={call._id || call.id}
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <Link
-                    to={`/call`}
-                    className={`flex flex-col p-3 rounded-lg border ${getUrgencyClass(call.remainingTime)} hover:bg-slate-100 transition-colors relative group`}
-                    onClick={() => setOpen(false)}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center mb-1">
-                          <span className="font-medium truncate text-slate-900">
-                            {call.location || "Unknown Location"}
-                          </span>
-                        </div>
-                        <p className="mb-2 text-sm text-slate-600 line-clamp-2">
-                          {call.description || "No description"}
-                        </p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-4">
+              <div className="space-y-2">
+                <Label htmlFor="filterMachine">Máquina</Label>
+                <Select value={filters.machineId} onValueChange={(value) => handleFilterChange("machineId", value)}>
+                  <SelectTrigger id="filterMachine">
+                    <SelectValue placeholder="Todas las máquinas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas las máquinas</SelectItem>
+                    {machines.map((machine) => (
+                      <SelectItem key={machine._id} value={machine._id}>
+                        {machine.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                        {/* Progress bar */}
-                        <div className="w-full h-1.5 bg-slate-200 rounded-full mb-2">
-                          <div
-                            className={`h-1.5 rounded-full ${getProgressColor(call.remainingTime)}`}
-                            style={{ width: `${calculateProgress(call.remainingTime)}%` }}
-                          ></div>
-                        </div>
+              <div className="space-y-2">
+                <Label htmlFor="filterDate">Fecha</Label>
+                <Input
+                  id="filterDate"
+                  type="date"
+                  value={filters.date}
+                  onChange={(e) => handleFilterChange("date", e.target.value)}
+                />
+              </div>
 
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center text-xs text-slate-500">
-                            <Calendar className="w-3.5 h-3.5 mr-1" />
-                            <span>
-                              {new Date(call.callTime).toLocaleDateString([], { month: "short", day: "numeric" })}
-                            </span>
-                            <span className="mx-1">•</span>
-                            <Clock className="w-3.5 h-3.5 mr-1" />
-                            <span>
-                              {new Date(call.callTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                            </span>
-                          </div>
+              <div className="space-y-2">
+                <Label htmlFor="filterStatus">Estatus</Label>
+                <Select value={filters.status} onValueChange={(value) => handleFilterChange("status", value)}>
+                  <SelectTrigger id="filterStatus">
+                    <SelectValue placeholder="Todos los estados" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los estados</SelectItem>
+                    <SelectItem value="Pendiente">Pendiente</SelectItem>
+                    <SelectItem value="Realizada">Realizada</SelectItem>
+                    <SelectItem value="Expirada">Expirada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                          <Badge
-                            className={`flex items-center gap-1 ${
-                              call.remainingTime <= 300
-                                ? "bg-rose-100 text-rose-800 border-rose-200"
-                                : call.remainingTime <= 900
-                                  ? "bg-amber-100 text-amber-800 border-amber-200"
-                                  : "bg-slate-100 text-slate-800 border-slate-200"
-                            }`}
-                            variant="outline"
-                          >
-                            {getUrgencyIcon(call.remainingTime)}
-                            <span>{formatTime(call.remainingTime || 0)}</span>
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Complete button */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="absolute transition-opacity opacity-0 top-2 right-2 group-hover:opacity-100"
-                      onClick={(e) => handleCompleteCall(call._id || call.id, e)}
-                    >
-                      <CheckCircle className="w-4 h-4 mr-1" />
-                      <span className="text-xs">Complete</span>
-                    </Button>
-                  </Link>
+              <div className="flex items-end">
+                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full">
+                  <Button onClick={applyFilters} className="w-full">
+                    <Filter className="w-4 h-4 mr-2" />
+                    Aplicar Filtros
+                  </Button>
                 </motion.div>
-              ))}
+              </div>
             </div>
-          </ScrollArea>
-        )}
 
-        <Separator />
+            <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="mb-4">
+              <TabsList>
+                <TabsTrigger value="all">Todas</TabsTrigger>
+                <TabsTrigger value="pending">Pendientes</TabsTrigger>
+                <TabsTrigger value="completed">Completadas</TabsTrigger>
+                <TabsTrigger value="expired">Expiradas</TabsTrigger>
+              </TabsList>
+            </Tabs>
 
-        <div className="flex items-center justify-between px-4 py-2">
-          <Button variant="link" size="sm" asChild className="text-slate-600">
-            <Link to="/call" onClick={() => setOpen(false)}>
-              View all calls
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" onClick={fetchCalls} className="text-slate-600">
-            Refresh
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
+            <div className="border rounded-md">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="font-bold">Nº DE MÁQUINA</TableHead>
+                    <TableHead className="font-bold">FECHA</TableHead>
+                    <TableHead className="font-bold">HORA LLAMADA</TableHead>
+                    <TableHead className="font-bold">DURACIÓN (MIN)</TableHead>
+                    <TableHead className="font-bold">TIEMPO RESTANTE</TableHead>
+                    <TableHead className="font-bold">ESTATUS</TableHead>
+                    <TableHead className="font-bold">ACCIÓN</TableHead>
+                    <TableHead className="font-bold">HORA TAREA TERMINADA</TableHead>
+                    <TableHead className="font-bold">DELETE</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="h-24 text-center">
+                        <div className="flex items-center justify-center">
+                          <Loader2 className="w-6 h-6 mr-2 animate-spin" />
+                          <span>Cargando...</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredCalls.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                        No hay llamadas registradas
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    <AnimatePresence>
+                      {filteredCalls.map((call) => (
+                        <motion.tr
+                          key={call._id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="border-b"
+                        >
+                          <TableCell className="font-medium">{getMachineNames(call)}</TableCell>
+                          <TableCell>{new Date(call.date).toLocaleDateString()}</TableCell>
+                          <TableCell>{new Date(call.callTime).toLocaleTimeString()}</TableCell>
+                          <TableCell>{call.duration || 90}</TableCell>
+                          <TableCell>
+                            <CallTimer
+                              remainingTime={call.remainingTime}
+                              status={call.status}
+                              duration={call.duration || 90}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={getStatusBadgeVariant(call.status)}
+                              className={
+                                call.status === "Realizada" ? "bg-green-500 hover:bg-green-600 text-white" : ""
+                              }
+                            >
+                              {getStatusIcon(call.status)}
+                              {call.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {isLogistics && call.status === "Pendiente" && (
+                              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                                {completingCall[call._id] ? (
+                                  <Loader2 className="w-5 h-5 animate-spin" />
+                                ) : (
+                                  <Checkbox onCheckedChange={() => handleCompleteCall(call._id)} className="w-5 h-5" />
+                                )}
+                              </motion.div>
+                            )}
+                            {call.status === "Realizada" && <Checkbox checked disabled className="w-5 h-5" />}
+                            {call.status === "Expirada" && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Info className="w-5 h-5 text-red-500" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Llamada expirada automáticamente</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {call.completionTime ? new Date(call.completionTime).toLocaleTimeString() : "-"}
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon" onClick={() => handleDeleteCall(call._id)}>
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </Button>{" "}
+                          </TableCell>
+                        </motion.tr>
+                      ))}
+                    </AnimatePresence>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Email notification component */}
+      <CallNotification
+        show={emailNotification.show}
+        message={emailNotification.message}
+        type={emailNotification.type}
+        onClose={() => setEmailNotification({ ...emailNotification, show: false })}
+      />
+    </motion.div>
   )
 }
+
+export default CallDashboard

@@ -75,6 +75,11 @@ export const createCall = async (data) => {
 
     const response = await apiRequest("POST", BASE_URL, callData)
 
+    // Handle email notification feedback if provided in the response
+    if (response && response.emailSent) {
+      console.log("Email notification sent successfully to:", response.emailRecipients)
+    }
+
     // Ensure the response has a valid remainingTime
     if (response) {
       // Calculate remaining time based on callTime
