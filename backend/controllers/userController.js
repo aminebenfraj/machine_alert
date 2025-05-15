@@ -3,41 +3,7 @@ const User = require("../models/UserModel")
 
 // List of allowed roles
 const rolesEnum = [
-  "Admin",
-  "Manager",
-  "Project Manager",
-  "Business Manager",
-  "Financial Leader",
-  "Manufacturing Eng. Manager",
-  "Manufacturing Eng. Leader",
-  "Tooling Manager",
-  "Automation Leader",
-  "SAP Leader",
-  "Methodes UAP1&3",
-  "Methodes UAP2",
-  "Maintenance Manager",
-  "Maintenance Leader UAP2",
-  "Purchasing Manager",
-  "Logistic Manager",
-  "Logistic Leader UAP1",
-  "Logistic Leader UAP2",
-  "Logistic Leader",
-  "POE Administrator",
-  "Material Administrator",
-  "Warehouse Leader UAP1",
-  "Warehouse Leader UAP2",
-  "Prod. Plant Manager UAP1",
-  "Prod. Plant Manager UAP2",
-  "Quality Manager",
-  "Quality Leader UAP1",
-  "Quality Leader UAP2",
-  "Quality Leader UAP3",
-  "Laboratory Leader",
-  "Customer",
-  "User",
-  "PRODUCCION",
-  "LOGISTICA",
-]
+  "Admin", "User","PRODUCCION","LOGISTICA",]
 
 // Get Current User Information (Optimized)
 exports.showUserInfo = async (req, res) => {
