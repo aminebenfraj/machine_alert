@@ -37,7 +37,7 @@ const CallDashboard = () => {
   const { user } = useAuth()
 
   const [selectedMachine, setSelectedMachine] = useState(null)
-  const [callDuration, setCallDuration] = useState(90) // Default duration is 90 minutes
+  const [selectedMachineDuration, setSelectedMachineDuration] = useState(90) // Default duration from selected machine
   const [machines, setMachines] = useState([])
   const [calls, setCalls] = useState([])
   const [loading, setLoading] = useState(true)
@@ -181,17 +181,17 @@ const CallDashboard = () => {
       setCreatingCall(true)
       console.log("Creating call for machine:", selectedMachine)
 
-      // Find the selected machine to get its name
+      // Find the selected machine to get its name and duration
       const selectedMachineObj = machines.find((m) => m._id === selectedMachine)
 
-      // Create a new call with the machine ID, current date, user, and duration
+      // Create a new call with the machine ID, current date, user, and duration from the machine
       const callData = {
         machineId: selectedMachine,
         callTime: new Date(),
         date: new Date(),
         status: "Pendiente",
         createdBy: user?.roles?.includes("PRODUCCION") ? "PRODUCCION" : "LOGISTICA",
-        duration: Number.parseInt(callDuration) || 90, // Use the input duration or default to 90
+        // No need to specify duration as it will use the machine's duration
       }
 
       console.log("Call data:", callData)
@@ -204,13 +204,13 @@ const CallDashboard = () => {
 
         // Ensure the new call has a remainingTime property
         if (!newCall.remainingTime && newCall.remainingTime !== 0) {
-          newCall.remainingTime = (newCall.duration || 90) * 60 // Use call's duration in seconds
+          newCall.remainingTime = (newCall.duration || selectedMachineObj.duration || 90) * 60 // Use call's duration in seconds
         }
       } else {
         newCall = {
           _id: Date.now().toString(), // Fallback ID if not provided by API
           ...callData,
-          remainingTime: (callData.duration || 90) * 60, // Use call's duration in seconds
+          remainingTime: (selectedMachineObj.duration || 90) * 60, // Use machine's duration in seconds
           machines: [{ name: selectedMachineObj?.name || "Máquina seleccionada" }],
         }
       }
@@ -244,12 +244,12 @@ const CallDashboard = () => {
   const handleMachineSelect = (machineId) => {
     console.log("Machine selected:", machineId)
     setSelectedMachine(machineId)
-  }
 
-  const handleDurationChange = (e) => {
-    // Ensure the duration is a positive number
-    const value = Number.parseInt(e.target.value) || 90
-    setCallDuration(Math.max(1, value))
+    // Find the selected machine to get its duration
+    const selectedMachineObj = machines.find((m) => m._id === machineId)
+    if (selectedMachineObj) {
+      setSelectedMachineDuration(selectedMachineObj.duration || 90)
+    }
   }
 
   const handleCompleteCall = async (id) => {
@@ -584,16 +584,12 @@ const CallDashboard = () => {
                 </div>
 
                 <div className="flex-1">
-                  <Label htmlFor="durationInput">Duración (minutos)</Label>
+                  <Label htmlFor="durationDisplay">Duración (minutos)</Label>
                   <div className="flex gap-2 mt-1">
-                    <Input
-                      id="durationInput"
-                      type="number"
-                      min="1"
-                      value={callDuration}
-                      onChange={handleDurationChange}
-                      className="flex-1"
-                    />
+                    <div className="flex items-center flex-1 px-3 py-2 border rounded-md border-input bg-background">
+                      <Clock className="w-4 h-4 mr-2 text-muted-foreground" />
+                      <span>{selectedMachineDuration} minutos</span>
+                    </div>
                     <Button
                       onClick={handleCallLogistics}
                       disabled={!selectedMachine || creatingCall}

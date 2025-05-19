@@ -7,7 +7,7 @@ import { Button } from "../../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card"
 import { Badge } from "../../../components/ui/badge"
 import { getAllMachines, deleteMachine } from "../../../apis/gestionStockApi/machineApi"
-import { Plus, Edit, Trash2 } from "lucide-react"
+import { Plus, Edit, Trash2, Clock } from "lucide-react"
 import { useAuth } from "../../../context/AuthContext"
 
 const ShowMachines = () => {
@@ -89,6 +89,12 @@ const ShowMachines = () => {
                   <CardContent className="p-4">
                     <h3 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">{machine.name}</h3>
                     <p className="mb-2 text-sm text-zinc-600 dark:text-zinc-300">{machine.description}</p>
+                    <div className="flex items-center mb-2">
+                      <Clock className="w-4 h-4 mr-1 text-blue-500" />
+                      <span className="text-sm text-zinc-600 dark:text-zinc-300">
+                        Duration: {machine.duration || 90} minutes
+                      </span>
+                    </div>
                     <Badge className={`mb-4 ${getStatusColor(machine.status)}`}>{machine.status}</Badge>
 
                     {canManageMachines && (

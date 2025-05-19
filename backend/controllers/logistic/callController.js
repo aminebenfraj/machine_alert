@@ -1,7 +1,8 @@
 const Call = require("../../models/logistic/CallModel")
 const Machine = require("../../models/gestionStockModels/MachineModel") // Add this import
 const excel = require("exceljs")
-const { sendCallCreationEmail } = require("../../utils/emailService")
+// Remove this line:
+// const { sendCallCreationEmail } = require("../../utils/emailService")
 
 exports.exportCallsToExcel = async (req, res) => {
   try {
@@ -122,10 +123,16 @@ exports.createCall = async (req, res) => {
       return res.status(401).json({ message: "Not authorized, no token" })
     }
 
-    const { machineId, duration } = req.body
+    const { machineId } = req.body
 
     if (!machineId) {
       return res.status(400).json({ message: "Machine ID is required" })
+    }
+
+    // Get the machine to use its duration
+    const machine = await Machine.findById(machineId)
+    if (!machine) {
+      return res.status(404).json({ message: "Machine not found" })
     }
 
     // Determine the creator role from the user object
@@ -143,22 +150,18 @@ exports.createCall = async (req, res) => {
       callTime: new Date(),
       date: new Date(),
       status: "Pendiente",
-      duration: duration || 90, // Use provided duration or default to 90
+      duration: machine.duration, // Use the machine's duration
     })
 
     const savedCall = await newCall.save()
 
-    // Get machine details for the email
-    const machine = await Machine.findById(machineId)
-    const machineName = machine ? machine.name : "Unknown Machine"
-
-    // Send email notification to LOGISTICA users
-    try {
-      await sendCallCreationEmail(savedCall, machineName)
-    } catch (emailError) {
-      console.error("Failed to send email notification:", emailError)
-      // Continue with the response even if email fails
-    }
+    // Remove the email sending code:
+    // try {
+    //   await sendCallCreationEmail(savedCall, machineName)
+    // } catch (emailError) {
+    //   console.error("Failed to send email notification:", emailError)
+    //   // Continue with the response even if email fails
+    // }
 
     // Populate the machine details before returning
     const populatedCall = await Call.findById(savedCall._id).populate("machines", "name description status")

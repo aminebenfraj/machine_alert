@@ -70,15 +70,10 @@ export const createCall = async (data) => {
       callTime: new Date(), // Ensure we have a valid date
       date: new Date(),
       status: "Pendiente",
-      duration: data.duration || 90, // Use provided duration or default to 90
+      // No need to specify duration as it will use the machine's duration
     }
 
     const response = await apiRequest("POST", BASE_URL, callData)
-
-    // Handle email notification feedback if provided in the response
-    if (response && response.emailSent) {
-      console.log("Email notification sent successfully to:", response.emailRecipients)
-    }
 
     // Ensure the response has a valid remainingTime
     if (response) {

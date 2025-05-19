@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useNavigate } from "react-router-dom" // Import useNavigate
 import { motion } from "framer-motion"
 import { Button } from "../../../components/ui/button"
 import { Input } from "../../../components/ui/input"
@@ -8,14 +9,17 @@ import { Textarea } from "../../../components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../../components/ui/card"
 import { createMachine } from "../../../apis/gestionStockApi/machineApi"
-import { Sparkles } from "lucide-react"
+import { Sparkles, ArrowLeft } from "lucide-react"
 
 const CreateMachine = () => {
+  const navigate = useNavigate() // Initialize useNavigate
   const [machine, setMachine] = useState({
     name: "",
     description: "",
     status: "active",
+    duration: 90, // Default duration is 90 minutes
   })
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -24,13 +28,18 @@ const CreateMachine = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setIsSubmitting(true)
+
     try {
       await createMachine(machine)
-      setMachine({ name: "", description: "", status: "active" })
       alert("Machine created successfully!")
+      // Navigate to the machines list page after successful creation
+      navigate("/machines")
     } catch (error) {
       console.error("Failed to create machine:", error)
       alert("Failed to create machine. Please try again.")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -71,6 +80,29 @@ const CreateMachine = () => {
               />
             </div>
             <div className="space-y-2">
+              <label htmlFor="duration" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Duration (minutes)
+              </label>
+              <Input
+                id="duration"
+                name="duration"
+                type="number"
+                min="1"
+                value={machine.duration}
+                onChange={(e) =>
+                  handleChange({
+                    target: {
+                      name: "duration",
+                      value: Number.parseInt(e.target.value) || 90,
+                    },
+                  })
+                }
+                required
+                className="w-full"
+                placeholder="Enter default duration in minutes"
+              />
+            </div>
+            <div className="space-y-2">
               <label htmlFor="status" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Status
               </label>
@@ -90,14 +122,29 @@ const CreateMachine = () => {
               </Select>
             </div>
           </CardContent>
-          <CardFooter>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-full">
+          <CardFooter className="flex justify-between">
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button type="button" variant="outline" onClick={() => navigate("/machines")}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
+            </motion.div>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Button
                 type="submit"
-                className="w-full text-white bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+                className="text-white bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+                disabled={isSubmitting}
               >
-                <Sparkles className="w-4 h-4 mr-2" />
-                Create Machine
+                {isSubmitting ? (
+                  <>
+                    <span className="mr-2">Creating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Create Machine
+                  </>
+                )}
               </Button>
             </motion.div>
           </CardFooter>

@@ -16,6 +16,7 @@ const EditMachine = () => {
     name: "",
     description: "",
     status: "active",
+    duration: 90, // Default duration is 90 minutes
   })
   const { id } = useParams()
   const navigate = useNavigate()
@@ -29,7 +30,10 @@ const EditMachine = () => {
   const fetchMachine = async () => {
     try {
       const data = await getMachineById(id)
-      setMachine(data)
+      setMachine({
+        ...data,
+        duration: data.duration || 90, // Ensure duration has a default value
+      })
     } catch (error) {
       console.error("Failed to fetch machine:", error)
       alert("Failed to fetch machine. Redirecting to machines list.")
@@ -88,6 +92,29 @@ const EditMachine = () => {
                 className="w-full"
                 placeholder="Enter machine description"
                 rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="duration" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Duration (minutes)
+              </label>
+              <Input
+                id="duration"
+                name="duration"
+                type="number"
+                min="1"
+                value={machine.duration}
+                onChange={(e) =>
+                  handleChange({
+                    target: {
+                      name: "duration",
+                      value: Number.parseInt(e.target.value) || 90,
+                    },
+                  })
+                }
+                required
+                className="w-full"
+                placeholder="Enter default duration in minutes"
               />
             </div>
             <div className="space-y-2">
