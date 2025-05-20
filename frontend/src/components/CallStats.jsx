@@ -2,7 +2,7 @@
 
 import { useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Clock, CheckCircle, AlertTriangle, Activity } from "lucide-react"
+import { Clock, CheckCircle, AlertTriangle, Activity } from 'lucide-react'
 
 export const CallStats = ({ calls }) => {
   const stats = useMemo(() => {
@@ -86,4 +86,3 @@ export const CallStats = ({ calls }) => {
     </div>
   )
 }
-

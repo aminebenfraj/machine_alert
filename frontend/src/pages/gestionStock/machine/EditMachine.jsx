@@ -48,6 +48,7 @@ const EditMachine = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+
     try {
       await updateMachine(id, machine)
       alert("Machine updated successfully!")

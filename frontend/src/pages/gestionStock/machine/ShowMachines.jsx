@@ -7,7 +7,7 @@ import { Button } from "../../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card"
 import { Badge } from "../../../components/ui/badge"
 import { getAllMachines, deleteMachine } from "../../../apis/gestionStockApi/machineApi"
-import { Plus, Edit, Trash2, Clock } from "lucide-react"
+import { Plus, Edit, Trash2, Clock } from 'lucide-react'
 import { useAuth } from "../../../context/AuthContext"
 
 const ShowMachines = () => {

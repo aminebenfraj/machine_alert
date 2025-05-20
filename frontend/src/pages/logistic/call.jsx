@@ -1,6 +1,6 @@
 "use client"
 import { Trash2 } from "lucide-react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { getCalls, createCall, completeCall, checkExpiredCalls, exportCalls, deleteCall } from "@/apis/logistic/callApi"
 import { getAllMachines } from "@/apis/gestionStockApi/machineApi"
@@ -32,6 +32,11 @@ import {
 import { toast } from "@/hooks/use-toast"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
+/**
+ * Call Dashboard Component
+ *
+ * Displays and manages calls between production and logistics teams
+ */
 const CallDashboard = () => {
   // Get the current user from auth context
   const { user } = useAuth()
@@ -52,64 +57,59 @@ const CallDashboard = () => {
     status: "all",
   })
 
-  // Ref for the interval timer
-  const timerRef = useRef(null)
-
   // Check if user has the LOGISTICA role
-  const isLogistics = user?.roles?.includes("LOGISTICA")
+  const isLogistics = useMemo(() => user?.roles?.includes("LOGISTICA"), [user?.roles])
+
   // Check if user has the PRODUCCION role
-  const isProduction = user?.roles?.includes("PRODUCCION")
+  const isProduction = useMemo(() => user?.roles?.includes("PRODUCCION"), [user?.roles])
 
-  useEffect(() => {
-    fetchCalls()
-    fetchMachines()
+  /**
+   * Fetches calls from the API with optional filters
+   * @param {boolean} silent - Whether to show loading indicators
+   */
+  const fetchCalls = useCallback(
+    async (silent = false) => {
+      try {
+        if (!silent) setLoading(true)
+        setRefreshing(true)
 
-    // Set up interval to update remaining time every second
-    timerRef.current = setInterval(() => {
-      updateRemainingTime()
-    }, 1000)
+        // Convert filter values for API
+        const apiFilters = { ...filters }
+        if (apiFilters.machineId === "all") delete apiFilters.machineId
+        if (apiFilters.status === "all") delete apiFilters.status
+        if (!apiFilters.date) delete apiFilters.date
 
-    // Set up interval to check expired calls and refresh data every 15 seconds
-    const refreshInterval = setInterval(() => {
-      if (isLogistics) {
-        // Check expired calls in the background (silently)
-        handleCheckExpiredCalls(true)
-      } else {
-        // For non-logistics users, just refresh the calls data
-        fetchCalls(true)
+        const callsData = await getCalls(apiFilters)
+        setCalls(callsData)
+      } catch (error) {
+        console.error("Error fetching calls:", error)
+        setCalls([])
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
       }
-    }, 15000) // 15 seconds
+    },
+    [filters],
+  )
 
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
-      clearInterval(refreshInterval)
-    }
-  }, [isLogistics])
-
-  const fetchMachines = async () => {
+  /**
+   * Fetches machines from the API
+   */
+  const fetchMachines = useCallback(async () => {
     try {
       console.log("Fetching machines...")
       const response = await getAllMachines()
-      console.log("Machines response:", response)
 
       // Check if response is directly an array (not wrapped in a data property)
       if (Array.isArray(response)) {
-        console.log("Machines data is directly an array:", response)
-
         // Only show active machines in the dropdown
         const activeMachines = response.filter((machine) => machine.status === "active")
-        console.log("Active machines:", activeMachines)
-
         setMachines(activeMachines)
       }
       // Check if response has a data property that is an array
       else if (response && response.data && Array.isArray(response.data)) {
-        console.log("Machines data in response.data:", response.data)
-
         // Only show active machines in the dropdown
         const activeMachines = response.data.filter((machine) => machine.status === "active")
-        console.log("Active machines:", activeMachines)
-
         setMachines(activeMachines)
       } else {
         console.warn("No valid machines data found in response")
@@ -119,31 +119,10 @@ const CallDashboard = () => {
       console.error("Error fetching machines:", error)
       setMachines([])
     }
-  }
-
-  const fetchCalls = async (silent = false) => {
-    try {
-      if (!silent) setLoading(true)
-      if (silent) setRefreshing(true)
-
-      // Convert filter values for API
-      const apiFilters = { ...filters }
-      if (apiFilters.machineId === "all") delete apiFilters.machineId
-      if (apiFilters.status === "all") delete apiFilters.status
-      if (!apiFilters.date) delete apiFilters.date
-      const callsData = await getCalls(apiFilters)
-      setCalls(callsData)
-    } catch (error) {
-      console.error("Error fetching calls:", error)
-      setCalls([])
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }
+  }, [])
 
   // Update the remaining time for all calls
-  const updateRemainingTime = () => {
+  const updateRemainingTime = useCallback(() => {
     setCalls((prevCalls) => {
       return prevCalls.map((call) => {
         if (call.status === "Pendiente") {
@@ -165,9 +144,79 @@ const CallDashboard = () => {
         return call
       })
     })
-  }
+  }, [])
 
-  const handleCallLogistics = async () => {
+  /**
+   * Handles checking for expired calls
+   * @param {boolean} silent - Whether to show loading indicators and toasts
+   */
+  const handleCheckExpiredCalls = useCallback(
+    async (silent = false) => {
+      try {
+        if (!silent) setCheckingExpired(true)
+
+        // Call the API to check expired calls
+        const response = await checkExpiredCalls()
+
+        // Refresh the calls list
+        await fetchCalls(true)
+
+        // Show success toast only if not silent
+        if (!silent) {
+          toast({
+            title: "Verificación completada",
+            description: response.data?.message || "Se han verificado las llamadas expiradas",
+            variant: "success",
+          })
+        }
+      } catch (error) {
+        console.error("Error checking expired calls:", error)
+
+        // Show error toast only if not silent
+        if (!silent) {
+          toast({
+            title: "Error",
+            description: "No se pudieron verificar las llamadas expiradas",
+            variant: "destructive",
+          })
+        }
+      } finally {
+        if (!silent) setCheckingExpired(false)
+      }
+    },
+    [fetchCalls],
+  )
+
+  useEffect(() => {
+    fetchCalls()
+    fetchMachines()
+
+    // Set up interval to update remaining time every second
+    const timerInterval = setInterval(() => {
+      updateRemainingTime()
+    }, 1000)
+
+    // Set up interval to check expired calls and refresh data every 15 seconds
+    const refreshInterval = setInterval(() => {
+      if (isLogistics) {
+        // Check expired calls in the background (silently)
+        handleCheckExpiredCalls(true)
+      } else {
+        // For non-logistics users, just refresh the calls data
+        fetchCalls(true)
+      }
+    }, 15000) // 15 seconds
+
+    return () => {
+      clearInterval(timerInterval)
+      clearInterval(refreshInterval)
+    }
+  }, [fetchCalls, fetchMachines, handleCheckExpiredCalls, isLogistics, updateRemainingTime])
+
+  /**
+   * Handles creating a new call to logistics
+   */
+  const handleCallLogistics = useCallback(async () => {
     if (!selectedMachine) {
       toast({
         title: "Error",
@@ -221,6 +270,9 @@ const CallDashboard = () => {
       // Reset the selected machine
       setSelectedMachine(null)
 
+      // Refresh the calls list to ensure proper rendering of the timer
+      fetchCalls(true)
+
       // Show success toast
       toast({
         title: "Llamada creada",
@@ -239,112 +291,95 @@ const CallDashboard = () => {
     } finally {
       setCreatingCall(false)
     }
-  }
+  }, [machines, selectedMachine, user?.roles, fetchCalls])
 
-  const handleMachineSelect = (machineId) => {
-    console.log("Machine selected:", machineId)
-    setSelectedMachine(machineId)
+  /**
+   * Handles selecting a machine from the dropdown
+   * @param {string} machineId - The ID of the selected machine
+   */
+  const handleMachineSelect = useCallback(
+    (machineId) => {
+      console.log("Machine selected:", machineId)
+      setSelectedMachine(machineId)
 
-    // Find the selected machine to get its duration
-    const selectedMachineObj = machines.find((m) => m._id === machineId)
-    if (selectedMachineObj) {
-      setSelectedMachineDuration(selectedMachineObj.duration || 90)
-    }
-  }
+      // Find the selected machine to get its duration
+      const selectedMachineObj = machines.find((m) => m._id === machineId)
+      if (selectedMachineObj) {
+        setSelectedMachineDuration(selectedMachineObj.duration || 90)
+      }
+    },
+    [machines],
+  )
 
-  const handleCompleteCall = async (id) => {
-    try {
-      // Set loading state for this specific call
-      setCompletingCall((prev) => ({ ...prev, [id]: true }))
+  /**
+   * Handles marking a call as completed
+   * @param {string} id - The ID of the call to complete
+   */
+  const handleCompleteCall = useCallback(
+    async (id) => {
+      try {
+        // Set loading state for this specific call
+        setCompletingCall((prev) => ({ ...prev, [id]: true }))
 
-      // Get the current time for completion
-      const completionTime = new Date()
+        // Get the current time for completion
+        const completionTime = new Date()
 
-      // Get the user role from the auth context
-      const userRole = user?.roles?.includes("LOGISTICA") ? "LOGISTICA" : "PRODUCCION"
+        // Get the user role from the auth context
+        const userRole = user?.roles?.includes("LOGISTICA") ? "LOGISTICA" : "PRODUCCION"
 
-      // Call the API to update the server FIRST
-      // Pass the user role to ensure proper authorization
-      await completeCall(id, userRole)
+        // Call the API to update the server FIRST
+        // Pass the user role to ensure proper authorization
+        await completeCall(id, userRole)
 
-      // Then update the local state after successful API call
-      setCalls((prevCalls) =>
-        prevCalls.map((call) =>
-          call._id === id
-            ? {
-                ...call,
-                status: "Realizada",
-                completionTime: completionTime,
-                remainingTime: 0, // Explicitly set remaining time to 0
-              }
-            : call,
-        ),
-      )
+        // Then update the local state after successful API call
+        setCalls((prevCalls) =>
+          prevCalls.map((call) =>
+            call._id === id
+              ? {
+                  ...call,
+                  status: "Realizada",
+                  completionTime: completionTime,
+                  remainingTime: 0, // Explicitly set remaining time to 0
+                }
+              : call,
+          ),
+        )
 
-      // Show success toast
-      toast({
-        title: "Llamada completada",
-        description: "La llamada ha sido marcada como completada",
-        variant: "success",
-      })
-    } catch (error) {
-      console.error("Error completing call:", error)
-
-      // Show error toast with more specific message
-      const errorMessage = error.response?.data?.message || "No se pudo completar la llamada"
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      })
-
-      // Refresh calls to ensure UI is in sync with server
-      fetchCalls(true)
-    } finally {
-      // Clear loading state for this call
-      setCompletingCall((prev) => {
-        const newState = { ...prev }
-        delete newState[id]
-        return newState
-      })
-    }
-  }
-
-  const handleCheckExpiredCalls = async (silent = false) => {
-    try {
-      if (!silent) setCheckingExpired(true)
-
-      // Call the API to check expired calls
-      const response = await checkExpiredCalls()
-
-      // Refresh the calls list
-      await fetchCalls(true)
-
-      // Show success toast only if not silent
-      if (!silent) {
+        // Show success toast
         toast({
-          title: "Verificación completada",
-          description: response.data.message || "Se han verificado las llamadas expiradas",
+          title: "Llamada completada",
+          description: "La llamada ha sido marcada como completada",
           variant: "success",
         })
-      }
-    } catch (error) {
-      console.error("Error checking expired calls:", error)
+      } catch (error) {
+        console.error("Error completing call:", error)
 
-      // Show error toast only if not silent
-      if (!silent) {
+        // Show error toast with more specific message
+        const errorMessage = error.response?.data?.message || "No se pudo completar la llamada"
         toast({
           title: "Error",
-          description: "No se pudieron verificar las llamadas expiradas",
+          description: errorMessage,
           variant: "destructive",
         })
-      }
-    } finally {
-      if (!silent) setCheckingExpired(false)
-    }
-  }
 
-  const handleExportToExcel = () => {
+        // Refresh calls to ensure UI is in sync with server
+        fetchCalls(true)
+      } finally {
+        // Clear loading state for this call
+        setCompletingCall((prev) => {
+          const newState = { ...prev }
+          delete newState[id]
+          return newState
+        })
+      }
+    },
+    [fetchCalls, user?.roles],
+  )
+
+  /**
+   * Handles exporting calls to Excel
+   */
+  const handleExportToExcel = useCallback(() => {
     // Convert filter values for API
     const apiFilters = { ...filters }
     if (apiFilters.machineId === "all") delete apiFilters.machineId
@@ -352,50 +387,57 @@ const CallDashboard = () => {
     if (!apiFilters.date) delete apiFilters.date
 
     exportCalls(apiFilters)
-  }
+  }, [filters])
 
-  const handleFilterChange = (name, value) => {
+  /**
+   * Handles changing a filter value
+   * @param {string} name - The name of the filter
+   * @param {string} value - The new value for the filter
+   */
+  const handleFilterChange = useCallback((name, value) => {
     setFilters((prev) => ({ ...prev, [name]: value }))
-  }
+  }, [])
 
-  const applyFilters = () => {
+  /**
+   * Handles applying filters to the calls list
+   */
+  const applyFilters = useCallback(() => {
     fetchCalls()
-  }
+  }, [fetchCalls])
 
-  // Get machine names for display
-  const getMachineNames = (call) => {
-    if (!call.machines || call.machines.length === 0) return "-"
-    return call.machines.map((machine) => machine.name).join(", ")
-  }
+  /**
+   * Handles deleting a call
+   * @param {string} id - The ID of the call to delete
+   */
+  const handleDeleteCall = useCallback(
+    async (id) => {
+      const confirm = window.confirm("¿Estás seguro de que quieres eliminar esta llamada?")
+      if (!confirm) return
 
-  // Get status badge variant
-  const getStatusBadgeVariant = (status) => {
-    switch (status) {
-      case "Realizada":
-        return "success"
-      case "Expirada":
-        return "destructive"
-      case "Pendiente":
-        return "secondary"
-      default:
-        return "outline"
-    }
-  }
-  const handleDeleteCall = async (id) => {
-    const confirm = window.confirm("¿Estás seguro de que quieres eliminar esta llamada?")
-    if (!confirm) return
+      try {
+        await deleteCall(id)
+        toast({
+          title: "Llamada eliminada",
+          description: "La llamada ha sido eliminada correctamente",
+          variant: "success",
+        })
+        fetchCalls() // Refresh the list after deletion
+      } catch (error) {
+        console.error("Error al eliminar la llamada:", error)
+        toast({
+          title: "Error",
+          description: "Error al eliminar la llamada",
+          variant: "destructive",
+        })
+      }
+    },
+    [fetchCalls],
+  )
 
-    try {
-      await deleteCall(id)
-      alert("Llamada eliminada correctamente")
-      fetchCalls() // Refresh the list after deletion
-    } catch (error) {
-      console.error("Error al eliminar la llamada:", error)
-      alert("Error al eliminar la llamada")
-    }
-  }
-
-  const handleDeleteAllExceptFirst10 = async () => {
+  /**
+   * Handles deleting all calls except the first 10
+   */
+  const handleDeleteAllExceptFirst10 = useCallback(async () => {
     const confirm = window.confirm("¿Estás seguro de que quieres eliminar todas las llamadas excepto las primeras 10?")
     if (!confirm) return
 
@@ -440,9 +482,30 @@ const CallDashboard = () => {
         variant: "destructive",
       })
     }
-  }
+  }, [calls, fetchCalls])
+
+  // Get machine names for display
+  const getMachineNames = useCallback((call) => {
+    if (!call.machines || call.machines.length === 0) return "-"
+    return call.machines.map((machine) => machine.name).join(", ")
+  }, [])
+
+  // Get status badge variant
+  const getStatusBadgeVariant = useCallback((status) => {
+    switch (status) {
+      case "Realizada":
+        return "success"
+      case "Expirada":
+        return "destructive"
+      case "Pendiente":
+        return "secondary"
+      default:
+        return "outline"
+    }
+  }, [])
+
   // Get status icon
-  const getStatusIcon = (status) => {
+  const getStatusIcon = useCallback((status) => {
     switch (status) {
       case "Realizada":
         return <CheckCircle className="w-3 h-3 mr-1" />
@@ -453,16 +516,18 @@ const CallDashboard = () => {
       default:
         return null
     }
-  }
+  }, [])
 
   // Filter calls based on active tab
-  const filteredCalls = calls.filter((call) => {
-    if (activeTab === "all") return true
-    if (activeTab === "pending") return call.status === "Pendiente"
-    if (activeTab === "completed") return call.status === "Realizada"
-    if (activeTab === "expired") return call.status === "Expirada"
-    return true
-  })
+  const filteredCalls = useMemo(() => {
+    return calls.filter((call) => {
+      if (activeTab === "all") return true
+      if (activeTab === "pending") return call.status === "Pendiente"
+      if (activeTab === "completed") return call.status === "Realizada"
+      if (activeTab === "expired") return call.status === "Expirada"
+      return true
+    })
+  }, [activeTab, calls])
 
   // If user is not authenticated or doesn't have either role, show loading or unauthorized message
   if (!user) {
@@ -814,7 +879,7 @@ const CallDashboard = () => {
                           <TableCell>
                             <Button variant="ghost" size="icon" onClick={() => handleDeleteCall(call._id)}>
                               <Trash2 className="w-4 h-4 text-red-500" />
-                            </Button>{" "}
+                            </Button>
                           </TableCell>
                         </motion.tr>
                       ))}
