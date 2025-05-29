@@ -17,6 +17,15 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
 import {
   Download,
   Filter,
@@ -28,6 +37,7 @@ import {
   Calendar,
   Info,
   RotateCw,
+  ChevronDown,
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -48,6 +58,7 @@ const CallDashboard = () => {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [creatingCall, setCreatingCall] = useState(false)
+  const [creatingMoleCall, setCreatingMoleCall] = useState(false)
   const [checkingExpired, setCheckingExpired] = useState(false)
   const [completingCall, setCompletingCall] = useState({})
   const [activeTab, setActiveTab] = useState("all")
@@ -56,6 +67,10 @@ const CallDashboard = () => {
     date: "",
     status: "all",
   })
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   // Check if user has the LOGISTICA role
   const isLogistics = useMemo(() => user?.roles?.includes("LOGISTICA"), [user?.roles])
@@ -81,6 +96,8 @@ const CallDashboard = () => {
 
         const callsData = await getCalls(apiFilters)
         setCalls(callsData)
+        // Reset to first page when filters change
+        setCurrentPage(1)
       } catch (error) {
         console.error("Error fetching calls:", error)
         setCalls([])
@@ -290,6 +307,87 @@ const CallDashboard = () => {
       })
     } finally {
       setCreatingCall(false)
+    }
+  }, [machines, selectedMachine, user?.roles, fetchCalls])
+
+  /**
+   * Handles creating a new mole call to logistics (30 min timer)
+   */
+  const handleMoleCall = useCallback(async () => {
+    if (!selectedMachine) {
+      toast({
+        title: "Error",
+        description: "Por favor selecciona una máquina",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setCreatingMoleCall(true)
+      console.log("Creating mole call for machine:", selectedMachine)
+
+      // Find the selected machine to get its name
+      const selectedMachineObj = machines.find((m) => m._id === selectedMachine)
+
+      // Create a new mole call with 30 minutes duration
+      const callData = {
+        machineId: selectedMachine,
+        callTime: new Date(),
+        date: new Date(),
+        status: "Pendiente",
+        createdBy: user?.roles?.includes("PRODUCCION") ? "PRODUCCION" : "LOGISTICA",
+        duration: 30, // Override to 30 minutes for mole calls
+        callType: "mole", // Mark as mole call
+      }
+
+      console.log("Mole call data:", callData)
+      const response = await createCall(callData)
+
+      // Get the created call data
+      let newCall
+      if (response && response.data) {
+        newCall = response.data
+
+        // Ensure the new call has a remainingTime property (30 minutes = 1800 seconds)
+        if (!newCall.remainingTime && newCall.remainingTime !== 0) {
+          newCall.remainingTime = 30 * 60 // 30 minutes in seconds
+        }
+      } else {
+        newCall = {
+          _id: Date.now().toString(), // Fallback ID if not provided by API
+          ...callData,
+          remainingTime: 30 * 60, // 30 minutes in seconds
+          machines: [{ name: selectedMachineObj?.name || "Máquina seleccionada" }],
+        }
+      }
+
+      // Add the new call to the calls array
+      setCalls((prevCalls) => [newCall, ...prevCalls])
+
+      // Reset the selected machine
+      setSelectedMachine(null)
+
+      // Refresh the calls list to ensure proper rendering of the timer
+      fetchCalls(true)
+
+      // Show success toast
+      toast({
+        title: "Llamada Cambio molde creada",
+        description: "Se ha creado una llamada de Cambio molde (30 min) a LOGISTICA exitosamente",
+        variant: "success",
+      })
+    } catch (error) {
+      console.error("Error creating mole call:", error)
+
+      // Show error toast
+      toast({
+        title: "Error",
+        description: "No se pudo crear la llamada de Cambio molde a LOGISTICA",
+        variant: "destructive",
+      })
+    } finally {
+      setCreatingMoleCall(false)
     }
   }, [machines, selectedMachine, user?.roles, fetchCalls])
 
@@ -529,6 +627,17 @@ const CallDashboard = () => {
     })
   }, [activeTab, calls])
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredCalls.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedCalls = filteredCalls.slice(startIndex, endIndex)
+
+  // Handle page change
+  const handlePageChange = (page) => {
+    setCurrentPage(page)
+  }
+
   // If user is not authenticated or doesn't have either role, show loading or unauthorized message
   if (!user) {
     return (
@@ -615,25 +724,36 @@ const CallDashboard = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
         >
-          <Card>
-            <CardHeader>
-              <CardTitle>Llamar a LOGISTICA</CardTitle>
-              <CardDescription>Selecciona una máquina para crear una llamada a LOGISTICA</CardDescription>
+          <Card className="bg-blue-50">
+            <CardHeader className="bg-blue-100">
+              <CardTitle className="text-blue-800">Llamar a LOGISTICA</CardTitle>
+              <CardDescription className="text-blue-700">
+                Selecciona una máquina para crear una llamada a LOGISTICA
+              </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50">
               <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
                 <div className="flex-1">
-                  <Label htmlFor="machineSelect">Seleccionar máquina</Label>
+                  <Label htmlFor="machineSelect" className="font-semibold text-blue-800">
+                    Seleccionar máquina
+                  </Label>
                   <div className="flex gap-2 mt-1">
                     <div className="flex-1">
                       <Select value={selectedMachine || ""} onValueChange={handleMachineSelect}>
-                        <SelectTrigger id="machineSelect">
+                        <SelectTrigger
+                          id="machineSelect"
+                          className="bg-white border-blue-300 hover:border-blue-400 focus:border-blue-500"
+                        >
                           <SelectValue placeholder="Seleccionar máquina" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="border-blue-300">
                           {machines && machines.length > 0 ? (
                             machines.map((machine) => (
-                              <SelectItem key={machine._id} value={machine._id}>
+                              <SelectItem
+                                key={machine._id}
+                                value={machine._id}
+                                className="hover:bg-blue-100 focus:bg-blue-100"
+                              >
                                 {machine.name} {machine.status !== "active" && `(${machine.status})`}
                               </SelectItem>
                             ))
@@ -649,20 +769,41 @@ const CallDashboard = () => {
                 </div>
 
                 <div className="flex-1">
-                  <Label htmlFor="durationDisplay">Duración (minutos)</Label>
+                  <Label htmlFor="durationDisplay" className="font-semibold text-blue-800">
+                    Duración (minutos)
+                  </Label>
                   <div className="flex gap-2 mt-1">
-                    <div className="flex items-center flex-1 px-3 py-2 border rounded-md border-input bg-background">
-                      <Clock className="w-4 h-4 mr-2 text-muted-foreground" />
-                      <span>{selectedMachineDuration} minutos</span>
+                    <div className="flex items-center flex-1 px-3 py-2 bg-white border border-blue-300 rounded-md">
+                      <Clock className="w-4 h-4 mr-2 text-blue-600" />
+                      <span className="text-blue-800">{selectedMachineDuration} minutos</span>
                     </div>
-                    <Button
-                      onClick={handleCallLogistics}
-                      disabled={!selectedMachine || creatingCall}
-                      className="flex items-center gap-2"
-                    >
-                      {creatingCall ? <Loader2 className="w-4 h-4 animate-spin" /> : <PhoneCall className="w-4 h-4" />}
-                      Llamar
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleCallLogistics}
+                        disabled={!selectedMachine || creatingCall}
+                        className="flex items-center gap-2 text-white bg-green-600 hover:bg-green-700"
+                      >
+                        {creatingCall ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <PhoneCall className="w-4 h-4" />
+                        )}
+                        Llamar
+                      </Button>
+                      <Button
+                        onClick={handleMoleCall}
+                        disabled={!selectedMachine || creatingMoleCall}
+                        variant="secondary"
+                        className="flex items-center gap-2 text-white bg-orange-500 hover:bg-orange-600"
+                      >
+                        {creatingMoleCall ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Clock className="w-4 h-4" />
+                        )}
+                        Cambio molde
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -708,7 +849,7 @@ const CallDashboard = () => {
                         variant="outline"
                         size="sm"
                         onClick={handleDeleteAllExceptFirst10}
-                        className="flex items-center gap-2 mr-2"
+                        className="flex items-center gap-2"
                       >
                         <Trash2 className="w-4 h-4" />
                         Eliminar excepto 10
@@ -720,62 +861,73 @@ const CallDashboard = () => {
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+
+              {/* Filters Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="flex items-center gap-2">
+                    <Filter className="w-4 h-4" />
+                    Filtros
+                    <ChevronDown className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="p-4 w-80">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="filterMachine">Máquina</Label>
+                      <Select
+                        value={filters.machineId}
+                        onValueChange={(value) => handleFilterChange("machineId", value)}
+                      >
+                        <SelectTrigger id="filterMachine">
+                          <SelectValue placeholder="Todas las máquinas" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todas las máquinas</SelectItem>
+                          {machines.map((machine) => (
+                            <SelectItem key={machine._id} value={machine._id}>
+                              {machine.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="filterDate">Fecha</Label>
+                      <Input
+                        id="filterDate"
+                        type="date"
+                        value={filters.date}
+                        onChange={(e) => handleFilterChange("date", e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="filterStatus">Estatus</Label>
+                      <Select value={filters.status} onValueChange={(value) => handleFilterChange("status", value)}>
+                        <SelectTrigger id="filterStatus">
+                          <SelectValue placeholder="Todos los estados" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos los estados</SelectItem>
+                          <SelectItem value="Pendiente">Pendiente</SelectItem>
+                          <SelectItem value="Realizada">Realizada</SelectItem>
+                          <SelectItem value="Expirada">Expirada</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <Button onClick={applyFilters} className="w-full">
+                      <Filter className="w-4 h-4 mr-2" />
+                      Aplicar Filtros
+                    </Button>
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-4">
-              <div className="space-y-2">
-                <Label htmlFor="filterMachine">Máquina</Label>
-                <Select value={filters.machineId} onValueChange={(value) => handleFilterChange("machineId", value)}>
-                  <SelectTrigger id="filterMachine">
-                    <SelectValue placeholder="Todas las máquinas" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas las máquinas</SelectItem>
-                    {machines.map((machine) => (
-                      <SelectItem key={machine._id} value={machine._id}>
-                        {machine.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="filterDate">Fecha</Label>
-                <Input
-                  id="filterDate"
-                  type="date"
-                  value={filters.date}
-                  onChange={(e) => handleFilterChange("date", e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="filterStatus">Estatus</Label>
-                <Select value={filters.status} onValueChange={(value) => handleFilterChange("status", value)}>
-                  <SelectTrigger id="filterStatus">
-                    <SelectValue placeholder="Todos los estados" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos los estados</SelectItem>
-                    <SelectItem value="Pendiente">Pendiente</SelectItem>
-                    <SelectItem value="Realizada">Realizada</SelectItem>
-                    <SelectItem value="Expirada">Expirada</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-end">
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full">
-                  <Button onClick={applyFilters} className="w-full">
-                    <Filter className="w-4 h-4 mr-2" />
-                    Aplicar Filtros
-                  </Button>
-                </motion.div>
-              </div>
-            </div>
-
             <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="mb-4">
               <TabsList>
                 <TabsTrigger value="all">Todas</TabsTrigger>
@@ -810,7 +962,7 @@ const CallDashboard = () => {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ) : filteredCalls.length === 0 ? (
+                  ) : paginatedCalls.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                         No hay llamadas registradas
@@ -818,7 +970,7 @@ const CallDashboard = () => {
                     </TableRow>
                   ) : (
                     <AnimatePresence>
-                      {filteredCalls.map((call) => (
+                      {paginatedCalls.map((call) => (
                         <motion.tr
                           key={call._id}
                           initial={{ opacity: 0, y: 10 }}
@@ -827,7 +979,19 @@ const CallDashboard = () => {
                           transition={{ duration: 0.2 }}
                           className="border-b"
                         >
-                          <TableCell className="font-medium">{getMachineNames(call)}</TableCell>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              {getMachineNames(call)}
+                              {call.callType === "mole" && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs text-orange-700 bg-orange-100 border-orange-300"
+                                >
+                                  CAMBIO MOLDE
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell>{new Date(call.date).toLocaleDateString()}</TableCell>
                           <TableCell>{new Date(call.callTime).toLocaleTimeString()}</TableCell>
                           <TableCell>{call.duration || 90}</TableCell>
@@ -839,15 +1003,24 @@ const CallDashboard = () => {
                             />
                           </TableCell>
                           <TableCell>
-                            <Badge
-                              variant={getStatusBadgeVariant(call.status)}
-                              className={
-                                call.status === "Realizada" ? "bg-green-500 hover:bg-green-600 text-white" : ""
-                              }
-                            >
-                              {getStatusIcon(call.status)}
-                              {call.status}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                              <Badge
+                                variant={getStatusBadgeVariant(call.status)}
+                                className={
+                                  call.status === "Realizada"
+                                    ? "bg-green-500 hover:bg-green-600 text-white"
+                                    : call.callType === "mole"
+                                      ? "bg-orange-500 hover:bg-orange-600 text-white border-orange-600"
+                                      : ""
+                                }
+                              >
+                                {getStatusIcon(call.status)}
+                                {call.status}
+                              </Badge>
+                              {call.callType === "mole" && (
+                                <span className="text-xs font-medium text-orange-600">30min</span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             {isLogistics && call.status === "Pendiente" && (
@@ -887,6 +1060,63 @@ const CallDashboard = () => {
                   )}
                 </TableBody>
               </Table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex justify-center mt-4">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          if (currentPage > 1) handlePageChange(currentPage - 1)
+                        }}
+                        className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <PaginationItem key={page}>
+                        <PaginationLink
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            handlePageChange(page)
+                          }}
+                          isActive={currentPage === page}
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          if (currentPage < totalPages) handlePageChange(currentPage + 1)
+                        }}
+                        className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
+
+            {/* Pagination Info */}
+            <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+              <span>
+                Mostrando {startIndex + 1} a {Math.min(endIndex, filteredCalls.length)} de {filteredCalls.length}{" "}
+                llamadas
+              </span>
+              <span>
+                Página {currentPage} de {totalPages}
+              </span>
             </div>
           </CardContent>
         </Card>

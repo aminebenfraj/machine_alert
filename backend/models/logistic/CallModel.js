@@ -36,6 +36,11 @@ const CallSchema = new Schema(
       default: 90, // Default to 90 minutes for backward compatibility
       required: true,
     },
+    callType: {
+      type: String,
+      enum: ["normal", "mole"],
+      default: "normal", // Default to normal calls
+    },
   },
   {
     timestamps: true,

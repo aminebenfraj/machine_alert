@@ -120,29 +120,32 @@ exports.createCall = async (req, res) => {
   try {
     // Check if user is authenticated
     if (!req.user) {
-      return res.status(401).json({ message: "Not authorized, no token" })
+      return res.status(401).json({ message: "Not authorized, no token" });
     }
 
-    const { machineId } = req.body
+    const { machineId, duration, callType } = req.body;
 
     if (!machineId) {
-      return res.status(400).json({ message: "Machine ID is required" })
+      return res.status(400).json({ message: "Machine ID is required" });
     }
 
-    // Get the machine to use its duration
-    const machine = await Machine.findById(machineId)
+    // Get the machine to use its duration (unless overridden)
+    const machine = await Machine.findById(machineId);
     if (!machine) {
-      return res.status(404).json({ message: "Machine not found" })
+      return res.status(404).json({ message: "Machine not found" });
     }
 
     // Determine the creator role from the user object
-    let creatorRole = "PRODUCCION" // Default
+    let creatorRole = "PRODUCCION"; // Default
 
     if (req.user.roles && Array.isArray(req.user.roles)) {
       if (req.user.roles.some((role) => role.toUpperCase() === "LOGISTICA" || role.toUpperCase() === "LOGÍSTICA")) {
-        creatorRole = "LOGISTICA"
+        creatorRole = "LOGISTICA";
       }
     }
+
+    // Use provided duration or machine's duration
+    const callDuration = duration || machine.duration;
 
     const newCall = new Call({
       machines: [machineId], // Store as array of machine IDs
@@ -150,28 +153,21 @@ exports.createCall = async (req, res) => {
       callTime: new Date(),
       date: new Date(),
       status: "Pendiente",
-      duration: machine.duration, // Use the machine's duration
-    })
+      duration: callDuration,
+      callType: callType || "normal", // Default to normal if not specified
+    });
 
-    const savedCall = await newCall.save()
-
-    // Remove the email sending code:
-    // try {
-    //   await sendCallCreationEmail(savedCall, machineName)
-    // } catch (emailError) {
-    //   console.error("Failed to send email notification:", emailError)
-    //   // Continue with the response even if email fails
-    // }
+    const savedCall = await newCall.save();
 
     // Populate the machine details before returning
-    const populatedCall = await Call.findById(savedCall._id).populate("machines", "name description status")
+    const populatedCall = await Call.findById(savedCall._id).populate("machines", "name description status");
 
-    res.status(201).json(populatedCall)
+    res.status(201).json(populatedCall);
   } catch (error) {
-    console.error("Error in createCall:", error)
-    res.status(500).json({ message: error.message })
+    console.error("Error in createCall:", error);
+    res.status(500).json({ message: error.message });
   }
-}
+};
 
 // Complete a call
 exports.completeCall = async (req, res) => {
@@ -215,10 +211,10 @@ exports.completeCall = async (req, res) => {
 exports.exportCalls = async (req, res) => {
   try {
     // Get token from query params for direct browser access
-    const { token, ...queryParams } = req.query
+    const { token, ...queryParams } = req.query;
 
-    const calls = await Call.find(queryParams).populate("machines", "name").sort({ callTime: -1 })
-    console.log("Calls to export:", calls)
+    const calls = await Call.find(queryParams).populate("machines", "name").sort({ callTime: -1 });
+    console.log("Calls to export:", calls);
 
     // Format for CSV
     const csvData = [
@@ -227,6 +223,7 @@ exports.exportCalls = async (req, res) => {
         "FECHA",
         "HORA LLAMADA",
         "DURACIÓN (MIN)",
+        "TIPO",
         "TIEMPO RESTANTE",
         "ESTATUS",
         "HORA TAREA TERMINADA",
@@ -238,24 +235,24 @@ exports.exportCalls = async (req, res) => {
         new Date(call.date).toLocaleDateString(),
         new Date(call.callTime).toLocaleTimeString(),
         call.duration || 90, // Include the duration
+        call.callType === "mole" ? "MOLE" : "NORMAL", // Include call type
         formatTime(call.remainingTime),
         call.status,
         call.completionTime ? new Date(call.completionTime).toLocaleTimeString() : "",
       ]),
-    ]
+    ];
 
-    res.setHeader("Content-Type", "text/csv")
-    res.setHeader("Content-Disposition", "attachment; filename=tabla_logistica.csv")
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=tabla_logistica.csv");
 
     // Simple CSV formatting
-    const csvContent = csvData.map((row) => row.join(",")).join("\n")
-    res.send(csvContent)
+    const csvContent = csvData.map((row) => row.join(",")).join("\n");
+    res.send(csvContent);
   } catch (error) {
-    console.error("Error in exportCalls:", error)
-    res.status(500).json({ message: error.message })
+    console.error("Error in exportCalls:", error);
+    res.status(500).json({ message: error.message });
   }
-}
-
+};
 // Update the checkExpiredCalls function to use the call's duration
 exports.checkExpiredCalls = async (req, res) => {
   try {
