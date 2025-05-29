@@ -43,7 +43,7 @@ import { toast } from "@/hooks/use-toast"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 /**
- * Call Dashboard Component
+ * Call Dashboard Component - Optimized for Tablet
  *
  * Displays and manages calls between production and logistics teams
  */
@@ -95,12 +95,40 @@ const CallDashboard = () => {
         if (!apiFilters.date) delete apiFilters.date
 
         const callsData = await getCalls(apiFilters)
-        setCalls(callsData)
-        // Reset to first page when filters change
-        setCurrentPage(1)
+
+        // Only update calls if we got valid data
+        if (callsData && Array.isArray(callsData)) {
+          setCalls(callsData)
+          // Reset to first page when filters change (only for non-silent calls)
+          if (!silent) {
+            setCurrentPage(1)
+          }
+        } else {
+          console.warn("Invalid calls data received:", callsData)
+          // Don't clear existing data on invalid response
+          if (!silent) {
+            toast({
+              title: "Advertencia",
+              description: "No se pudieron cargar las llamadas correctamente",
+              variant: "destructive",
+            })
+          }
+        }
       } catch (error) {
         console.error("Error fetching calls:", error)
-        setCalls([])
+
+        // Only clear calls and show error for non-silent requests
+        if (!silent) {
+          setCalls([])
+          toast({
+            title: "Error",
+            description: "Error al cargar las llamadas",
+            variant: "destructive",
+          })
+        } else {
+          // For silent requests, just log the error but don't clear data
+          console.warn("Silent fetch failed, keeping existing data")
+        }
       } finally {
         setLoading(false)
         setRefreshing(false)
@@ -141,6 +169,11 @@ const CallDashboard = () => {
   // Update the remaining time for all calls
   const updateRemainingTime = useCallback(() => {
     setCalls((prevCalls) => {
+      // Don't update if there are no calls
+      if (!prevCalls || prevCalls.length === 0) {
+        return prevCalls
+      }
+
       return prevCalls.map((call) => {
         if (call.status === "Pendiente") {
           // If timer has reached zero
@@ -175,8 +208,10 @@ const CallDashboard = () => {
         // Call the API to check expired calls
         const response = await checkExpiredCalls()
 
-        // Refresh the calls list
-        await fetchCalls(true)
+        // Refresh the calls list only if the expired check was successful
+        if (response) {
+          await fetchCalls(true)
+        }
 
         // Show success toast only if not silent
         if (!silent) {
@@ -196,6 +231,9 @@ const CallDashboard = () => {
             description: "No se pudieron verificar las llamadas expiradas",
             variant: "destructive",
           })
+        } else {
+          // For silent requests, just log the error
+          console.warn("Silent expired check failed")
         }
       } finally {
         if (!silent) setCheckingExpired(false)
@@ -215,12 +253,15 @@ const CallDashboard = () => {
 
     // Set up interval to check expired calls and refresh data every 15 seconds
     const refreshInterval = setInterval(() => {
-      if (isLogistics) {
-        // Check expired calls in the background (silently)
-        handleCheckExpiredCalls(true)
-      } else {
-        // For non-logistics users, just refresh the calls data
-        fetchCalls(true)
+      // Only refresh if user is active and page is visible
+      if (document.visibilityState === "visible") {
+        if (isLogistics) {
+          // Check expired calls in the background (silently)
+          handleCheckExpiredCalls(true)
+        } else {
+          // For non-logistics users, just refresh the calls data
+          fetchCalls(true)
+        }
       }
     }, 15000) // 15 seconds
 
@@ -606,11 +647,11 @@ const CallDashboard = () => {
   const getStatusIcon = useCallback((status) => {
     switch (status) {
       case "Realizada":
-        return <CheckCircle className="w-3 h-3 mr-1" />
+        return <CheckCircle className="w-4 h-4 mr-1" />
       case "Expirada":
-        return <XCircle className="w-3 h-3 mr-1" />
+        return <XCircle className="w-4 h-4 mr-1" />
       case "Pendiente":
-        return <Clock className="w-3 h-3 mr-1" />
+        return <Clock className="w-4 h-4 mr-1" />
       default:
         return null
     }
@@ -641,9 +682,9 @@ const CallDashboard = () => {
   // If user is not authenticated or doesn't have either role, show loading or unauthorized message
   if (!user) {
     return (
-      <div className="container py-6 mx-auto flex items-center justify-center h-[80vh]">
-        <Loader2 className="w-8 h-8 mr-2 animate-spin" />
-        <span>Cargando información de usuario...</span>
+      <div className="container py-8 mx-auto flex items-center justify-center h-[80vh]">
+        <Loader2 className="w-10 h-10 mr-3 animate-spin" />
+        <span className="text-lg">Cargando información de usuario...</span>
       </div>
     )
   }
@@ -654,10 +695,12 @@ const CallDashboard = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="container py-6 mx-auto"
+        className="container py-8 mx-auto"
       >
-        <h1 className="text-3xl font-bold tracking-tight text-center">Acceso no autorizado</h1>
-        <p className="mt-4 text-center">No tienes permisos para acceder a este módulo. Contacta al administrador.</p>
+        <h1 className="text-4xl font-bold tracking-tight text-center">Acceso no autorizado</h1>
+        <p className="mt-6 text-lg text-center">
+          No tienes permisos para acceder a este módulo. Contacta al administrador.
+        </p>
       </motion.div>
     )
   }
@@ -667,40 +710,41 @@ const CallDashboard = () => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className="container py-6 mx-auto space-y-6"
+      className="container px-4 py-6 mx-auto space-y-8 md:px-6"
     >
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Panel de Control</h1>
-          <div className="flex items-center gap-4">
+          <h1 className="text-4xl font-bold tracking-tight">Panel de Control</h1>
+          <div className="flex flex-col gap-4 mt-3 sm:flex-row sm:items-center">
             <div className="flex items-center">
               Usuario:{" "}
-              <Badge variant="outline" className="ml-1 font-mono">
+              <Badge variant="outline" className="px-3 py-1 ml-2 font-mono text-base">
                 {isProduction ? "PRODUCCION" : "LOGISTICA"}
               </Badge>
             </div>
-            <div className="flex items-center">
-              <Calendar className="w-4 h-4 mr-1" />
+            <div className="flex items-center text-lg">
+              <Calendar className="w-5 h-5 mr-2" />
               {new Date().toLocaleDateString()}
             </div>
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="outline"
-                  size="icon"
+                  size="lg"
                   onClick={isLogistics ? () => handleCheckExpiredCalls(false) : () => fetchCalls(false)}
                   disabled={checkingExpired || refreshing}
+                  className="min-h-[48px] min-w-[48px]"
                 >
                   {checkingExpired || refreshing ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
                     <motion.div whileHover={{ rotate: 180 }} transition={{ duration: 0.3 }}>
-                      <RotateCw className="w-4 h-4" />
+                      <RotateCw className="w-5 h-5" />
                     </motion.div>
                   )}
                 </Button>
@@ -725,24 +769,24 @@ const CallDashboard = () => {
           transition={{ duration: 0.3, delay: 0.1 }}
         >
           <Card className="bg-blue-50">
-            <CardHeader className="bg-blue-100">
-              <CardTitle className="text-blue-800">Llamar a LOGISTICA</CardTitle>
-              <CardDescription className="text-blue-700">
+            <CardHeader className="pb-4 bg-blue-100">
+              <CardTitle className="text-2xl text-blue-800">Llamar a LOGISTICA</CardTitle>
+              <CardDescription className="text-lg text-blue-700">
                 Selecciona una máquina para crear una llamada a LOGISTICA
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50">
-              <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
+            <CardContent className="p-8 bg-gradient-to-r from-blue-50 to-indigo-50">
+              <div className="flex flex-col space-y-6 lg:flex-row lg:space-y-0 lg:space-x-6">
                 <div className="flex-1">
-                  <Label htmlFor="machineSelect" className="font-semibold text-blue-800">
+                  <Label htmlFor="machineSelect" className="text-lg font-semibold text-blue-800">
                     Seleccionar máquina
                   </Label>
-                  <div className="flex gap-2 mt-1">
+                  <div className="flex gap-3 mt-2">
                     <div className="flex-1">
                       <Select value={selectedMachine || ""} onValueChange={handleMachineSelect}>
                         <SelectTrigger
                           id="machineSelect"
-                          className="bg-white border-blue-300 hover:border-blue-400 focus:border-blue-500"
+                          className="h-12 text-lg bg-white border-blue-300 hover:border-blue-400 focus:border-blue-500"
                         >
                           <SelectValue placeholder="Seleccionar máquina" />
                         </SelectTrigger>
@@ -752,13 +796,13 @@ const CallDashboard = () => {
                               <SelectItem
                                 key={machine._id}
                                 value={machine._id}
-                                className="hover:bg-blue-100 focus:bg-blue-100"
+                                className="py-3 text-lg hover:bg-blue-100 focus:bg-blue-100"
                               >
                                 {machine.name} {machine.status !== "active" && `(${machine.status})`}
                               </SelectItem>
                             ))
                           ) : (
-                            <SelectItem value="no-machines" disabled>
+                            <SelectItem value="no-machines" disabled className="py-3 text-lg">
                               No hay máquinas disponibles
                             </SelectItem>
                           )}
@@ -769,24 +813,24 @@ const CallDashboard = () => {
                 </div>
 
                 <div className="flex-1">
-                  <Label htmlFor="durationDisplay" className="font-semibold text-blue-800">
+                  <Label htmlFor="durationDisplay" className="text-lg font-semibold text-blue-800">
                     Duración (minutos)
                   </Label>
-                  <div className="flex gap-2 mt-1">
-                    <div className="flex items-center flex-1 px-3 py-2 bg-white border border-blue-300 rounded-md">
-                      <Clock className="w-4 h-4 mr-2 text-blue-600" />
-                      <span className="text-blue-800">{selectedMachineDuration} minutos</span>
+                  <div className="flex gap-3 mt-2">
+                    <div className="flex items-center flex-1 h-12 px-4 py-3 bg-white border border-blue-300 rounded-md">
+                      <Clock className="w-5 h-5 mr-3 text-blue-600" />
+                      <span className="text-lg font-medium text-blue-800">{selectedMachineDuration} minutos</span>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-3">
                       <Button
                         onClick={handleCallLogistics}
                         disabled={!selectedMachine || creatingCall}
-                        className="flex items-center gap-2 text-white bg-green-600 hover:bg-green-700"
+                        className="flex items-center h-12 gap-3 px-6 text-lg font-medium text-white bg-green-600 hover:bg-green-700"
                       >
                         {creatingCall ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <Loader2 className="w-5 h-5 animate-spin" />
                         ) : (
-                          <PhoneCall className="w-4 h-4" />
+                          <PhoneCall className="w-5 h-5" />
                         )}
                         Llamar
                       </Button>
@@ -794,12 +838,12 @@ const CallDashboard = () => {
                         onClick={handleMoleCall}
                         disabled={!selectedMachine || creatingMoleCall}
                         variant="secondary"
-                        className="flex items-center gap-2 text-white bg-orange-500 hover:bg-orange-600"
+                        className="flex items-center h-12 gap-3 px-6 text-lg font-medium text-white bg-orange-500 hover:bg-orange-600"
                       >
                         {creatingMoleCall ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <Loader2 className="w-5 h-5 animate-spin" />
                         ) : (
-                          <Clock className="w-4 h-4" />
+                          <Clock className="w-5 h-5" />
                         )}
                         Cambio molde
                       </Button>
@@ -818,20 +862,20 @@ const CallDashboard = () => {
         transition={{ duration: 0.3, delay: 0.2 }}
       >
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle>Registro de Llamadas</CardTitle>
-            <div className="flex gap-2">
+          <CardHeader className="flex flex-col pb-4 space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
+            <CardTitle className="text-2xl">Registro de Llamadas</CardTitle>
+            <div className="flex flex-wrap gap-3">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                       <Button
                         variant="outline"
-                        size="sm"
+                        size="lg"
                         onClick={handleExportToExcel}
-                        className="flex items-center gap-2"
+                        className="flex items-center h-12 gap-2 px-4 text-base"
                       >
-                        <Download className="w-4 h-4" />
+                        <Download className="w-5 h-5" />
                         Exportar
                       </Button>
                     </motion.div>
@@ -847,11 +891,11 @@ const CallDashboard = () => {
                     <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                       <Button
                         variant="outline"
-                        size="sm"
+                        size="lg"
                         onClick={handleDeleteAllExceptFirst10}
-                        className="flex items-center gap-2"
+                        className="flex items-center h-12 gap-2 px-4 text-base"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-5 h-5" />
                         Eliminar excepto 10
                       </Button>
                     </motion.div>
@@ -865,27 +909,31 @@ const CallDashboard = () => {
               {/* Filters Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="flex items-center gap-2">
-                    <Filter className="w-4 h-4" />
+                  <Button variant="outline" size="lg" className="flex items-center h-12 gap-2 px-4 text-base">
+                    <Filter className="w-5 h-5" />
                     Filtros
                     <ChevronDown className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="p-4 w-80">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="filterMachine">Máquina</Label>
+                <DropdownMenuContent align="end" className="p-6 w-96">
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <Label htmlFor="filterMachine" className="text-base font-medium">
+                        Máquina
+                      </Label>
                       <Select
                         value={filters.machineId}
                         onValueChange={(value) => handleFilterChange("machineId", value)}
                       >
-                        <SelectTrigger id="filterMachine">
+                        <SelectTrigger id="filterMachine" className="h-12 text-base">
                           <SelectValue placeholder="Todas las máquinas" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">Todas las máquinas</SelectItem>
+                          <SelectItem value="all" className="py-3 text-base">
+                            Todas las máquinas
+                          </SelectItem>
                           {machines.map((machine) => (
-                            <SelectItem key={machine._id} value={machine._id}>
+                            <SelectItem key={machine._id} value={machine._id} className="py-3 text-base">
                               {machine.name}
                             </SelectItem>
                           ))}
@@ -893,33 +941,46 @@ const CallDashboard = () => {
                       </Select>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="filterDate">Fecha</Label>
+                    <div className="space-y-3">
+                      <Label htmlFor="filterDate" className="text-base font-medium">
+                        Fecha
+                      </Label>
                       <Input
                         id="filterDate"
                         type="date"
                         value={filters.date}
                         onChange={(e) => handleFilterChange("date", e.target.value)}
+                        className="h-12 text-base"
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="filterStatus">Estatus</Label>
+                    <div className="space-y-3">
+                      <Label htmlFor="filterStatus" className="text-base font-medium">
+                        Estatus
+                      </Label>
                       <Select value={filters.status} onValueChange={(value) => handleFilterChange("status", value)}>
-                        <SelectTrigger id="filterStatus">
+                        <SelectTrigger id="filterStatus" className="h-12 text-base">
                           <SelectValue placeholder="Todos los estados" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">Todos los estados</SelectItem>
-                          <SelectItem value="Pendiente">Pendiente</SelectItem>
-                          <SelectItem value="Realizada">Realizada</SelectItem>
-                          <SelectItem value="Expirada">Expirada</SelectItem>
+                          <SelectItem value="all" className="py-3 text-base">
+                            Todos los estados
+                          </SelectItem>
+                          <SelectItem value="Pendiente" className="py-3 text-base">
+                            Pendiente
+                          </SelectItem>
+                          <SelectItem value="Realizada" className="py-3 text-base">
+                            Realizada
+                          </SelectItem>
+                          <SelectItem value="Expirada" className="py-3 text-base">
+                            Expirada
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
-                    <Button onClick={applyFilters} className="w-full">
-                      <Filter className="w-4 h-4 mr-2" />
+                    <Button onClick={applyFilters} className="w-full h-12 text-base">
+                      <Filter className="w-5 h-5 mr-2" />
                       Aplicar Filtros
                     </Button>
                   </div>
@@ -927,44 +988,52 @@ const CallDashboard = () => {
               </DropdownMenu>
             </div>
           </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="mb-4">
-              <TabsList>
-                <TabsTrigger value="all">Todas</TabsTrigger>
-                <TabsTrigger value="pending">Pendientes</TabsTrigger>
-                <TabsTrigger value="completed">Completadas</TabsTrigger>
-                <TabsTrigger value="expired">Expiradas</TabsTrigger>
+          <CardContent className="p-6">
+            <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="mb-6">
+              <TabsList className="grid w-full h-12 grid-cols-4">
+                <TabsTrigger value="all" className="text-base">
+                  Todas
+                </TabsTrigger>
+                <TabsTrigger value="pending" className="text-base">
+                  Pendientes
+                </TabsTrigger>
+                <TabsTrigger value="completed" className="text-base">
+                  Completadas
+                </TabsTrigger>
+                <TabsTrigger value="expired" className="text-base">
+                  Expiradas
+                </TabsTrigger>
               </TabsList>
             </Tabs>
 
-            <div className="border rounded-md">
+            <div className="overflow-x-auto border rounded-lg">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="font-bold">Nº DE MÁQUINA</TableHead>
-                    <TableHead className="font-bold">FECHA</TableHead>
-                    <TableHead className="font-bold">HORA LLAMADA</TableHead>
-                    <TableHead className="font-bold">DURACIÓN (MIN)</TableHead>
-                    <TableHead className="font-bold">TIEMPO RESTANTE</TableHead>
-                    <TableHead className="font-bold">ESTATUS</TableHead>
-                    <TableHead className="font-bold">ACCIÓN</TableHead>
-                    <TableHead className="font-bold">HORA TAREA TERMINADA</TableHead>
-                    <TableHead className="font-bold">DELETE</TableHead>
+                  <TableRow className="bg-gray-50">
+                    <TableHead className="py-4 text-base font-bold">Nº DE MÁQUINA</TableHead>
+                    <TableHead className="py-4 text-base font-bold">FECHA</TableHead>
+                    <TableHead className="py-4 text-base font-bold">HORA LLAMADA</TableHead>
+                    <TableHead className="py-4 text-base font-bold">DURACIÓN (MIN)</TableHead>
+                    <TableHead className="py-4 text-base font-bold">TIEMPO RESTANTE</TableHead>
+                    <TableHead className="py-4 text-base font-bold">ESTATUS</TableHead>
+                    <TableHead className="py-4 text-base font-bold">ACCIÓN</TableHead>
+                    <TableHead className="py-4 text-base font-bold">HORA TAREA TERMINADA</TableHead>
+                    <TableHead className="py-4 text-base font-bold">DELETE</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-24 text-center">
+                      <TableCell colSpan={9} className="h-32 text-center">
                         <div className="flex items-center justify-center">
-                          <Loader2 className="w-6 h-6 mr-2 animate-spin" />
-                          <span>Cargando...</span>
+                          <Loader2 className="w-8 h-8 mr-3 animate-spin" />
+                          <span className="text-lg">Cargando...</span>
                         </div>
                       </TableCell>
                     </TableRow>
                   ) : paginatedCalls.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                      <TableCell colSpan={9} className="h-32 text-lg text-center text-muted-foreground">
                         No hay llamadas registradas
                       </TableCell>
                     </TableRow>
@@ -977,67 +1046,69 @@ const CallDashboard = () => {
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0 }}
                           transition={{ duration: 0.2 }}
-                          className="border-b"
+                          className="border-b hover:bg-gray-50"
                         >
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              {getMachineNames(call)}
+                          <TableCell className="py-4 text-base font-medium">
+                            <div className="flex flex-col gap-2">
+                              <span>{getMachineNames(call)}</span>
                               {call.callType === "mole" && (
                                 <Badge
                                   variant="outline"
-                                  className="text-xs text-orange-700 bg-orange-100 border-orange-300"
+                                  className="text-sm text-orange-700 bg-orange-100 border-orange-300 w-fit"
                                 >
                                   CAMBIO MOLDE
                                 </Badge>
                               )}
                             </div>
                           </TableCell>
-                          <TableCell>{new Date(call.date).toLocaleDateString()}</TableCell>
-                          <TableCell>{new Date(call.callTime).toLocaleTimeString()}</TableCell>
-                          <TableCell>{call.duration || 90}</TableCell>
-                          <TableCell>
+                          <TableCell className="py-4 text-base">{new Date(call.date).toLocaleDateString()}</TableCell>
+                          <TableCell className="py-4 text-base">
+                            {new Date(call.callTime).toLocaleTimeString()}
+                          </TableCell>
+                          <TableCell className="py-4 text-base font-medium">{call.duration || 90}</TableCell>
+                          <TableCell className="py-4">
                             <CallTimer
                               remainingTime={call.remainingTime}
                               status={call.status}
                               duration={call.duration || 90}
                             />
                           </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
+                          <TableCell className="py-4">
+                            <div className="flex flex-col gap-2">
                               <Badge
                                 variant={getStatusBadgeVariant(call.status)}
-                                className={
+                                className={`text-sm ${
                                   call.status === "Realizada"
                                     ? "bg-green-500 hover:bg-green-600 text-white"
                                     : call.callType === "mole"
                                       ? "bg-orange-500 hover:bg-orange-600 text-white border-orange-600"
                                       : ""
-                                }
+                                }`}
                               >
                                 {getStatusIcon(call.status)}
                                 {call.status}
                               </Badge>
                               {call.callType === "mole" && (
-                                <span className="text-xs font-medium text-orange-600">30min</span>
+                                <span className="text-sm font-medium text-orange-600">30min</span>
                               )}
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="py-4">
                             {isLogistics && call.status === "Pendiente" && (
                               <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
                                 {completingCall[call._id] ? (
-                                  <Loader2 className="w-5 h-5 animate-spin" />
+                                  <Loader2 className="w-6 h-6 animate-spin" />
                                 ) : (
-                                  <Checkbox onCheckedChange={() => handleCompleteCall(call._id)} className="w-5 h-5" />
+                                  <Checkbox onCheckedChange={() => handleCompleteCall(call._id)} className="w-6 h-6" />
                                 )}
                               </motion.div>
                             )}
-                            {call.status === "Realizada" && <Checkbox checked disabled className="w-5 h-5" />}
+                            {call.status === "Realizada" && <Checkbox checked disabled className="w-6 h-6" />}
                             {call.status === "Expirada" && (
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Info className="w-5 h-5 text-red-500" />
+                                    <Info className="w-6 h-6 text-red-500" />
                                   </TooltipTrigger>
                                   <TooltipContent>
                                     <p>Llamada expirada automáticamente</p>
@@ -1046,12 +1117,17 @@ const CallDashboard = () => {
                               </TooltipProvider>
                             )}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="py-4 text-base">
                             {call.completionTime ? new Date(call.completionTime).toLocaleTimeString() : "-"}
                           </TableCell>
-                          <TableCell>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteCall(call._id)}>
-                              <Trash2 className="w-4 h-4 text-red-500" />
+                          <TableCell className="py-4">
+                            <Button
+                              variant="ghost"
+                              size="lg"
+                              onClick={() => handleDeleteCall(call._id)}
+                              className="min-h-[44px] min-w-[44px]"
+                            >
+                              <Trash2 className="w-5 h-5 text-red-500" />
                             </Button>
                           </TableCell>
                         </motion.tr>
@@ -1064,9 +1140,9 @@ const CallDashboard = () => {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex justify-center mt-4">
+              <div className="flex justify-center mt-8">
                 <Pagination>
-                  <PaginationContent>
+                  <PaginationContent className="gap-2">
                     <PaginationItem>
                       <PaginationPrevious
                         href="#"
@@ -1074,7 +1150,7 @@ const CallDashboard = () => {
                           e.preventDefault()
                           if (currentPage > 1) handlePageChange(currentPage - 1)
                         }}
-                        className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                        className={`h-12 px-4 text-base ${currentPage === 1 ? "pointer-events-none opacity-50" : ""}`}
                       />
                     </PaginationItem>
 
@@ -1087,6 +1163,7 @@ const CallDashboard = () => {
                             handlePageChange(page)
                           }}
                           isActive={currentPage === page}
+                          className="h-12 px-4 text-base min-w-[48px]"
                         >
                           {page}
                         </PaginationLink>
@@ -1100,7 +1177,7 @@ const CallDashboard = () => {
                           e.preventDefault()
                           if (currentPage < totalPages) handlePageChange(currentPage + 1)
                         }}
-                        className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+                        className={`h-12 px-4 text-base ${currentPage === totalPages ? "pointer-events-none opacity-50" : ""}`}
                       />
                     </PaginationItem>
                   </PaginationContent>
@@ -1109,7 +1186,7 @@ const CallDashboard = () => {
             )}
 
             {/* Pagination Info */}
-            <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+            <div className="flex flex-col gap-4 mt-6 text-base sm:flex-row sm:justify-between sm:items-center text-muted-foreground">
               <span>
                 Mostrando {startIndex + 1} a {Math.min(endIndex, filteredCalls.length)} de {filteredCalls.length}{" "}
                 llamadas
