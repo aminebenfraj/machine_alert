@@ -3,61 +3,16 @@ import { apiRequest } from "../api"
 const BASE_URL = "api/calls"
 
 // Get all calls with optional filtering
-export const getCalls = async (filters = {}) => {
-  try {
-    console.log("Fetching calls with filters:", filters)
-    const calls = await apiRequest("GET", BASE_URL, null, false, filters)
+export const getCalls = (filters = {}, pagination = {}) => {
+  const params = { ...filters }
 
-    // Process calls to ensure they have remainingTime
-    if (Array.isArray(calls)) {
-      return calls.map((call) => {
-        // Always recalculate remaining time for pending calls
-        if (call.status === "Pendiente") {
-          try {
-            // Ensure callTime is a valid date
-            const callTime = new Date(call.callTime).getTime()
+  // Add pagination parameters
+  if (pagination.page) params.page = pagination.page
+  if (pagination.limit) params.limit = pagination.limit
 
-            // Check if callTime is valid
-            if (isNaN(callTime)) {
-              console.error("Invalid callTime for call:", call)
-              return {
-                ...call,
-                remainingTime: 0,
-              }
-            }
-
-            const currentTime = new Date().getTime()
-            const elapsedSeconds = Math.floor((currentTime - callTime) / 1000)
-            const totalSeconds = (call.duration || 90) * 60 // Use call's duration or default to 90 minutes
-            const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds)
-
-            return {
-              ...call,
-              remainingTime: remainingSeconds,
-            }
-          } catch (error) {
-            console.error("Error calculating remaining time:", error, call)
-            return {
-              ...call,
-              remainingTime: 0,
-            }
-          }
-        } else {
-          // For completed or expired calls, set remainingTime to 0
-          return {
-            ...call,
-            remainingTime: 0,
-          }
-        }
-      })
-    }
-
-    return calls || []
-  } catch (error) {
-    console.error("Error in getCalls:", error)
-    return []
-  }
+  return apiRequest("GET", BASE_URL, null, false, params)
 }
+
 
 // Create a new call
 export const createCall = async (data) => {

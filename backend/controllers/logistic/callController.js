@@ -85,36 +85,124 @@ exports.exportCallsToExcel = async (req, res) => {
 }
 
 // Get all calls with optional filtering
-exports.getCalls = async (req, res) => {
+ exports.getCalls = async (req, res) => {
   try {
-    // Check if user is authenticated
-    if (!req.user) {
-      return res.status(401).json({ message: "Not authorized, no token" })
-    }
-
-    const { machineId, date, status } = req.query
+    const { machineId, date, status, factoryId, categoryId, page = 1, limit = 10 } = req.query
 
     // Build filter object
     const filter = {}
-    if (machineId) filter.machines = machineId
-    if (status) filter.status = status
+
+    if (machineId) {
+      filter.machines = machineId
+    }
+
     if (date) {
       const startDate = new Date(date)
       const endDate = new Date(date)
       endDate.setDate(endDate.getDate() + 1)
-      filter.date = { $gte: startDate, $lt: endDate }
+
+      filter.date = {
+        $gte: startDate,
+        $lt: endDate,
+      }
     }
 
-    // Populate the machines field to get machine details
-    const calls = await Call.find(filter).populate("machines", "name description status").sort({ callTime: -1 })
+    if (status) {
+      filter.status = status
+    }
 
-    res.json(calls)
+    // Convert page and limit to numbers
+    const pageNum = Number.parseInt(page, 10)
+    const limitNum = Number.parseInt(limit, 10)
+    const skip = (pageNum - 1) * limitNum
+
+    // Get total count for pagination
+    const total = await Call.countDocuments(filter)
+    const totalPages = Math.ceil(total / limitNum)
+
+    // Get paginated calls
+    let calls = await Call.find(filter)
+      .populate({
+        path: "machines",
+        select: "name description status duration factoryId",
+        populate: {
+          path: "factoryId",
+          select: "name description categoryId",
+          populate: {
+            path: "categoryId",
+            select: "name description",
+          },
+        },
+      })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
+
+    // Filter by factory or category if specified
+    if (factoryId || categoryId) {
+      calls = calls.filter((call) => {
+        if (!call.machines || call.machines.length === 0) return false
+
+        return call.machines.some((machine) => {
+          if (factoryId && machine.factoryId) {
+            return machine.factoryId._id.toString() === factoryId
+          }
+
+          if (categoryId && machine.factoryId && machine.factoryId.categoryId) {
+            return machine.factoryId.categoryId._id.toString() === categoryId
+          }
+
+          return true
+        })
+      })
+    }
+
+    // Calculate remaining time for each call
+    const callsWithRemainingTime = calls.map((call) => {
+      const callObj = call.toObject()
+
+      if (callObj.status === "Pendiente") {
+        const now = new Date()
+        const callTime = new Date(callObj.callTime)
+        const duration = callObj.duration || 90
+        const elapsedMinutes = Math.floor((now - callTime) / (1000 * 60))
+        const remainingMinutes = Math.max(0, duration - elapsedMinutes)
+
+        callObj.remainingTime = remainingMinutes * 60 // Convert to seconds
+
+        // Auto-expire if time is up
+        if (remainingMinutes <= 0 && callObj.status === "Pendiente") {
+          callObj.status = "Expirada"
+        }
+      } else {
+        callObj.remainingTime = 0
+      }
+
+      return callObj
+    })
+
+    // Return paginated response
+    res.status(200).json({
+      data: {
+        calls: callsWithRemainingTime,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages,
+          hasNextPage: pageNum < totalPages,
+          hasPrevPage: pageNum > 1,
+        },
+      },
+    })
   } catch (error) {
-    console.error("Error in getCalls:", error)
-    res.status(500).json({ message: error.message })
+    console.error("Error fetching calls:", error)
+    res.status(500).json({
+      message: "Server error while fetching calls.",
+      error: error.message,
+    })
   }
 }
-
 // Update the createCall function to send email notifications
 exports.createCall = async (req, res) => {
   try {

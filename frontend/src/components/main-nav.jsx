@@ -4,7 +4,24 @@ import { useState, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
 import { useAuth } from "@/context/AuthContext"
-import { Settings, LogOut, Menu, X, User, PhoneCall, Wrench, Shield, Home } from "lucide-react"
+import {
+  Settings,
+  LogOut,
+  Menu,
+  X,
+  User,
+  PhoneCall,
+  Wrench,
+  Shield,
+  Home,
+  Factory,
+  Building2,
+  Users,
+  LayoutDashboard,
+  FolderOpen,
+  UserPlus,
+  BarChart3,
+} from "lucide-react"
 
 import {
   DropdownMenu,
@@ -14,9 +31,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  NavigationMenu,
+  NavigationMenuContent,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  NavigationMenuTrigger,
+} from "@/components/ui/navigation-menu"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
 
 export default function MainNav() {
   const { user, logout } = useAuth()
@@ -49,58 +75,73 @@ export default function MainNav() {
     return user?.roles?.includes(role)
   }
 
-  // Check if user is admin
+  // Check if user is admin or production
   const isAdmin = hasRole("Admin")
+  const isProduction = hasRole("PRODUCCION")
+  const isLogistics = hasRole("LOGISTICA")
+  const canManage = isAdmin || isProduction
 
-  // Navigation items based on user roles
-  const navItems = [
-    // All authenticated users can see these
-    ...(user
-      ? [
-          {
-            name: "Call Dashboard",
-            path: "/",
-            icon: PhoneCall,
-            roles: ["PRODUCCION", "LOGISTICA"],
-          },
-          {
-            name: "Machines",
-            path: "/machines",
-            icon: Wrench,
-            roles: ["Admin", "PRODUCCION", "LOGISTICA"],
-          },
-          {
-            name: "Profile",
-            path: "/profile",
-            icon: User,
-            roles: ["*"], // All authenticated users
-          },
-          {
-            name: "Settings",
-            path: "/settings",
-            icon: Settings,
-            roles: ["*"], // All authenticated users
-          },
-        ]
-      : []),
-
-    // Admin-only items
-    ...(isAdmin
-      ? [
-          {
-            name: "Admin Dashboard",
-            path: "/admin",
-            icon: Shield,
-            roles: ["Admin"],
-          },
-        ]
-      : []),
+  // Navigation structure for management users
+  const managementNavigation = [
+    {
+      title: "Dashboard",
+      href: "/dashboard",
+      icon: LayoutDashboard,
+      description: "Vista principal del sistema",
+    },
+    {
+      title: "Gestión",
+      icon: FolderOpen,
+      items: [
+        {
+          title: "Categorías",
+          href: "/categories",
+          icon: Factory,
+          description: "Gestionar categorías de fábricas",
+        },
+        {
+          title: "Fábricas",
+          href: "/factories",
+          icon: Building2,
+          description: "Gestionar fábricas del sistema",
+        },
+        {
+          title: "Máquinas",
+          href: "/machines",
+          icon: Wrench,
+          description: "Gestionar máquinas y equipos",
+        },
+      ],
+    },
   ]
 
-  // Filter nav items based on user roles
-  const filteredNavItems = navItems.filter(
-    (item) => item.roles.includes("*") || item.roles.some((role) => hasRole(role)),
-  )
+  // Admin-only navigation
+  const adminNavigation = [
+    {
+      title: "Administración",
+      icon: Shield,
+      items: [
+        {
+          title: "Panel Admin",
+          href: "/admin",
+          icon: Shield,
+          description: "Panel de administración",
+        },
+        {
+          title: "Crear Usuario",
+          href: "/admin/create-user",
+          icon: UserPlus,
+          description: "Crear nuevos usuarios",
+        },
+        {
+          title: "Gestión Usuarios",
+          href: "/admin/users",
+          icon: Users,
+          description: "Gestionar usuarios del sistema",
+        },
+      ],
+    },
+  ]
 
   if (!mounted) return null
 
@@ -108,52 +149,185 @@ export default function MainNav() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex items-center justify-between h-16 px-4">
         {/* Logo */}
-        <Link to={"/"} className="flex items-center gap-2">
+        <Link to="/dashboard" className="flex items-center gap-2">
           <img src="/novares-logo.webp" alt="Novares" className="h-8" />
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex md:items-center md:gap-6">
-          {user && (
-            <>
-              {filteredNavItems.map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`flex items-center gap-1 text-sm font-medium transition-colors hover:text-primary ${
-                    location.pathname === item.path ? "text-primary" : "text-muted-foreground"
-                  }`}
-                >
-                  <item.icon className="w-4 h-4" />
-                  {item.name}
+        {user && canManage && (
+          <NavigationMenu className="hidden lg:flex">
+            <NavigationMenuList className="gap-2">
+              {/* Dashboard Link */}
+              <NavigationMenuItem>
+                <Link to="/dashboard">
+                  <NavigationMenuLink
+                    className={`group inline-flex h-10 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 ${
+                      location.pathname === "/dashboard" ? "bg-accent text-accent-foreground" : ""
+                    }`}
+                  >
+                    <LayoutDashboard className="w-4 h-4 mr-2" />
+                    Dashboard
+                  </NavigationMenuLink>
                 </Link>
-              ))}
-            </>
-          )}
+              </NavigationMenuItem>
 
-          {!user && (
-            <>
-              <Link
-                to="/"
-                className={`flex items-center gap-1 text-sm font-medium transition-colors hover:text-primary ${
-                  location.pathname === "/" ? "text-primary" : "text-muted-foreground"
-                }`}
-              >
-                <Home className="w-4 h-4" />
-                Login
-              </Link>
-              <Link
-                to="/register"
-                className={`flex items-center gap-1 text-sm font-medium transition-colors hover:text-primary ${
-                  location.pathname === "/register" ? "text-primary" : "text-muted-foreground"
-                }`}
-              >
-                <User className="w-4 h-4" />
-                Register
-              </Link>
-            </>
-          )}
-        </nav>
+              {/* Management Dropdown */}
+              <NavigationMenuItem>
+                <NavigationMenuTrigger className="h-10">
+                  <FolderOpen className="w-4 h-4 mr-2" />
+                  Gestión
+                </NavigationMenuTrigger>
+                <NavigationMenuContent>
+                  <div className="grid gap-3 p-6 w-[400px]">
+                    <div className="grid gap-1">
+                      <h4 className="mb-2 text-sm font-medium leading-none">Gestión del Sistema</h4>
+                      <Link
+                        to="/categories"
+                        className="block p-3 space-y-1 leading-none no-underline transition-colors rounded-md outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Factory className="w-4 h-4" />
+                          <div className="text-sm font-medium leading-none">Categorías</div>
+                        </div>
+                        <p className="text-sm leading-snug line-clamp-2 text-muted-foreground">
+                          Gestionar categorías de fábricas
+                        </p>
+                      </Link>
+                      <Link
+                        to="/factories"
+                        className="block p-3 space-y-1 leading-none no-underline transition-colors rounded-md outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4" />
+                          <div className="text-sm font-medium leading-none">Fábricas</div>
+                        </div>
+                        <p className="text-sm leading-snug line-clamp-2 text-muted-foreground">
+                          Gestionar fábricas del sistema
+                        </p>
+                      </Link>
+                      <Link
+                        to="/machines"
+                        className="block p-3 space-y-1 leading-none no-underline transition-colors rounded-md outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Wrench className="w-4 h-4" />
+                          <div className="text-sm font-medium leading-none">Máquinas</div>
+                        </div>
+                        <p className="text-sm leading-snug line-clamp-2 text-muted-foreground">
+                          Gestionar máquinas y equipos
+                        </p>
+                      </Link>
+                    </div>
+                  </div>
+                </NavigationMenuContent>
+              </NavigationMenuItem>
+
+              {/* Operations Dropdown */}
+              <NavigationMenuItem>
+                <NavigationMenuTrigger className="h-10">
+                  <PhoneCall className="w-4 h-4 mr-2" />
+                  Operaciones
+                </NavigationMenuTrigger>
+                <NavigationMenuContent>
+                  <div className="grid gap-3 p-6 w-[350px]">
+                    <div className="grid gap-1">
+                      <h4 className="mb-2 text-sm font-medium leading-none">Operaciones Diarias</h4>
+                      <Link
+                        to="/call"
+                        className="block p-3 space-y-1 leading-none no-underline transition-colors rounded-md outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                      >
+                        <div className="flex items-center gap-2">
+                          <PhoneCall className="w-4 h-4" />
+                          <div className="text-sm font-medium leading-none">Sistema de Llamadas</div>
+                        </div>
+                        <p className="text-sm leading-snug line-clamp-2 text-muted-foreground">
+                          Gestionar llamadas logísticas
+                        </p>
+                      </Link>
+                      <Link
+                        to="/reports"
+                        className="block p-3 space-y-1 leading-none no-underline transition-colors rounded-md outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                      >
+                        <div className="flex items-center gap-2">
+                          <BarChart3 className="w-4 h-4" />
+                          <div className="text-sm font-medium leading-none">Reportes</div>
+                        </div>
+                        <p className="text-sm leading-snug line-clamp-2 text-muted-foreground">
+                          Reportes y estadísticas del sistema
+                        </p>
+                      </Link>
+                    </div>
+                  </div>
+                </NavigationMenuContent>
+              </NavigationMenuItem>
+
+              {/* Admin-only Dropdown */}
+              {isAdmin && (
+                <NavigationMenuItem>
+                  <NavigationMenuTrigger className="h-10">
+                    <Shield className="w-4 h-4 mr-2" />
+                    Admin
+                  </NavigationMenuTrigger>
+                  <NavigationMenuContent>
+                    <div className="grid gap-3 p-6 w-[350px]">
+                      <div className="grid gap-1">
+                        <h4 className="mb-2 text-sm font-medium leading-none">Administración</h4>
+                        <Link
+                          to="/admin"
+                          className="block p-3 space-y-1 leading-none no-underline transition-colors rounded-md outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Shield className="w-4 h-4" />
+                            <div className="text-sm font-medium leading-none">Panel Admin</div>
+                          </div>
+                          <p className="text-sm leading-snug line-clamp-2 text-muted-foreground">
+                            Panel de administración del sistema
+                          </p>
+                        </Link>
+                        <Link
+                          to="/admin/create-user"
+                          className="block p-3 space-y-1 leading-none no-underline transition-colors rounded-md outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                        >
+                          <div className="flex items-center gap-2">
+                            <UserPlus className="w-4 h-4" />
+                            <div className="text-sm font-medium leading-none">Crear Usuario</div>
+                          </div>
+                          <p className="text-sm leading-snug line-clamp-2 text-muted-foreground">
+                            Crear nuevos usuarios del sistema
+                          </p>
+                        </Link>
+                      </div>
+                    </div>
+                  </NavigationMenuContent>
+                </NavigationMenuItem>
+              )}
+            </NavigationMenuList>
+          </NavigationMenu>
+        )}
+
+        {/* Simple navigation for logistics users */}
+        {user && isLogistics && !canManage && (
+          <nav className="hidden lg:flex lg:items-center lg:gap-6">
+            <Link
+              to="/dashboard"
+              className={`flex items-center gap-2 text-sm font-medium transition-colors hover:text-primary ${
+                location.pathname === "/dashboard" ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              Dashboard
+            </Link>
+            <Link
+              to="/call"
+              className={`flex items-center gap-2 text-sm font-medium transition-colors hover:text-primary ${
+                location.pathname === "/call" ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              <PhoneCall className="w-4 h-4" />
+              Llamadas
+            </Link>
+          </nav>
+        )}
 
         {/* User Menu (Desktop) */}
         {user && (
@@ -161,7 +335,7 @@ export default function MainNav() {
             <div className="flex items-center gap-2">
               {user.roles && user.roles.length > 0 && (
                 <Badge variant="outline" className="hidden lg:inline-flex">
-                  {user.roles[0]}
+                  {user.roles.join(", ")}
                 </Badge>
               )}
               <DropdownMenu>
@@ -173,30 +347,39 @@ export default function MainNav() {
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium leading-none">{user.username}</p>
                       <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                      {user.roles && (
+                        <div className="flex gap-1 mt-1">
+                          {user.roles.map((role) => (
+                            <Badge key={role} variant="secondary" className="text-xs">
+                              {role}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link to="/profile" className="cursor-pointer">
                       <User className="w-4 h-4 mr-2" />
-                      Profile
+                      Perfil
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/settings" className="cursor-pointer">
                       <Settings className="w-4 h-4 mr-2" />
-                      Settings
+                      Configuración
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
+                  <DropdownMenuItem onClick={handleLogout} className="text-red-600 cursor-pointer">
                     <LogOut className="w-4 h-4 mr-2" />
-                    Log out
+                    Cerrar Sesión
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -205,7 +388,7 @@ export default function MainNav() {
         )}
 
         {/* Mobile Menu Button */}
-        <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsOpen(!isOpen)}>
+        <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setIsOpen(!isOpen)}>
           {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </Button>
       </div>
@@ -216,13 +399,13 @@ export default function MainNav() {
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: "auto" }}
           exit={{ opacity: 0, height: 0 }}
-          className="md:hidden"
+          className="border-t lg:hidden"
         >
           <div className="container px-4 py-4 space-y-4">
             {user ? (
               <>
                 {/* User info */}
-                <div className="flex items-center gap-4 p-4 border rounded-lg">
+                <div className="flex items-center gap-4 p-4 border rounded-lg bg-muted/50">
                   <Avatar className="w-10 h-10">
                     <AvatarImage src={user.image || "/placeholder.svg?height=40&width=40"} alt={user.username} />
                     <AvatarFallback>{user.username?.substring(0, 2).toUpperCase() || "U"}</AvatarFallback>
@@ -230,50 +413,163 @@ export default function MainNav() {
                   <div className="flex flex-col">
                     <span className="font-medium">{user.username}</span>
                     <span className="text-xs text-muted-foreground">{user.email}</span>
+                    {user.roles && (
+                      <div className="flex gap-1 mt-1">
+                        {user.roles.map((role) => (
+                          <Badge key={role} variant="secondary" className="text-xs">
+                            {role}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Navigation links */}
                 <nav className="flex flex-col space-y-2">
-                  {filteredNavItems.map((item) => (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      className={`flex items-center gap-2 p-2 rounded-md hover:bg-accent ${
-                        location.pathname === item.path ? "bg-accent text-accent-foreground" : "text-muted-foreground"
-                      }`}
-                    >
-                      <item.icon className="w-5 h-5" />
-                      {item.name}
-                    </Link>
-                  ))}
+                  {/* Dashboard */}
+                  <Link
+                    to="/dashboard"
+                    className={`flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors ${
+                      location.pathname === "/dashboard" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+                    }`}
+                  >
+                    <LayoutDashboard className="w-5 h-5" />
+                    Dashboard
+                  </Link>
+
+                  {canManage && (
+                    <>
+                      <Separator className="my-2" />
+                      <div className="px-3 py-2">
+                        <h4 className="text-sm font-medium text-muted-foreground">GESTIÓN</h4>
+                      </div>
+                      <Link
+                        to="/categories"
+                        className={`flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors ${
+                          location.pathname === "/categories"
+                            ? "bg-accent text-accent-foreground"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        <Factory className="w-5 h-5" />
+                        Categorías
+                      </Link>
+                      <Link
+                        to="/factories"
+                        className={`flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors ${
+                          location.pathname === "/factories"
+                            ? "bg-accent text-accent-foreground"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        <Building2 className="w-5 h-5" />
+                        Fábricas
+                      </Link>
+                      <Link
+                        to="/machines"
+                        className={`flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors ${
+                          location.pathname === "/machines"
+                            ? "bg-accent text-accent-foreground"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        <Wrench className="w-5 h-5" />
+                        Máquinas
+                      </Link>
+
+                      <Separator className="my-2" />
+                      <div className="px-3 py-2">
+                        <h4 className="text-sm font-medium text-muted-foreground">OPERACIONES</h4>
+                      </div>
+                    </>
+                  )}
+
+                  <Link
+                    to="/call"
+                    className={`flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors ${
+                      location.pathname === "/call" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+                    }`}
+                  >
+                    <PhoneCall className="w-5 h-5" />
+                    Sistema de Llamadas
+                  </Link>
+
+                  {isAdmin && (
+                    <>
+                      <Separator className="my-2" />
+                      <div className="px-3 py-2">
+                        <h4 className="text-sm font-medium text-muted-foreground">ADMINISTRACIÓN</h4>
+                      </div>
+                      <Link
+                        to="/admin"
+                        className={`flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors ${
+                          location.pathname === "/admin" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+                        }`}
+                      >
+                        <Shield className="w-5 h-5" />
+                        Panel Admin
+                      </Link>
+                      <Link
+                        to="/admin/create-user"
+                        className={`flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors ${
+                          location.pathname === "/admin/create-user"
+                            ? "bg-accent text-accent-foreground"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        <UserPlus className="w-5 h-5" />
+                        Crear Usuario
+                      </Link>
+                    </>
+                  )}
+
+                  <Separator className="my-2" />
+                  <Link
+                    to="/profile"
+                    className={`flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors ${
+                      location.pathname === "/profile" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+                    }`}
+                  >
+                    <User className="w-5 h-5" />
+                    Perfil
+                  </Link>
+                  <Link
+                    to="/settings"
+                    className={`flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors ${
+                      location.pathname === "/settings" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+                    }`}
+                  >
+                    <Settings className="w-5 h-5" />
+                    Configuración
+                  </Link>
                 </nav>
 
                 {/* Logout button */}
-                <Button variant="destructive" className="w-full" onClick={handleLogout}>
+                <Button variant="destructive" className="w-full mt-4" onClick={handleLogout}>
                   <LogOut className="w-4 h-4 mr-2" />
-                  Log out
+                  Cerrar Sesión
                 </Button>
               </>
             ) : (
               <div className="flex flex-col space-y-2">
                 <Link
-                  to="/"
-                  className={`flex items-center gap-2 p-2 rounded-md hover:bg-accent ${
-                    location.pathname === "/" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+                  to="/login"
+                  className={`flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors ${
+                    location.pathname === "/login" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
                   }`}
                 >
                   <Home className="w-5 h-5" />
-                  Login
+                  Iniciar Sesión
                 </Link>
                 <Link
                   to="/register"
-                  className={`flex items-center gap-2 p-2 rounded-md hover:bg-accent ${
+                  className={`flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors ${
                     location.pathname === "/register" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
                   }`}
                 >
                   <User className="w-5 h-5" />
-                  Register
+                  Registrarse
                 </Link>
               </div>
             )}

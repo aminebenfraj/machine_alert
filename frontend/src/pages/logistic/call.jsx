@@ -75,8 +75,15 @@ const CallDashboard = () => {
     status: "all",
   })
 
+  // Add pagination state after existing state declarations
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0,
+  })
+
   // Pagination state
-  const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
 
   // Check if user has the LOGISTICA role
@@ -89,7 +96,7 @@ const CallDashboard = () => {
    * Fetches calls from the API with factory filter
    */
   const fetchCalls = useCallback(
-    async (silent = false) => {
+    async (silent = false, page = pagination.page) => {
       try {
         if (!silent) setLoading(true)
         setRefreshing(true)
@@ -100,22 +107,52 @@ const CallDashboard = () => {
         if (apiFilters.status === "all") delete apiFilters.status
         if (!apiFilters.date) delete apiFilters.date
 
-        const callsData = await getCalls(apiFilters)
+        // Add pagination parameters
+        const paginationParams = {
+          page: page,
+          limit: pagination.limit,
+        }
 
-        // Filter calls by factory (client-side filtering for machines in this factory)
-        if (callsData && Array.isArray(callsData)) {
+        const response = await getCalls({ ...apiFilters, ...paginationParams })
+
+        if (response && response.data) {
+          // Handle paginated response
+          const { calls: callsData, pagination: paginationData } = response.data
+
+          // Filter calls by factory (client-side filtering for machines in this factory)
+          if (callsData && Array.isArray(callsData)) {
+            const factoryMachineIds = machines.map((m) => m._id)
+            const factoryCalls = callsData.filter(
+              (call) =>
+                call.machines && call.machines.some((machine) => factoryMachineIds.includes(machine._id || machine)),
+            )
+
+            setCalls(factoryCalls)
+            setPagination({
+              page: paginationData.page || page,
+              limit: paginationData.limit || 10,
+              total: paginationData.total || 0,
+              totalPages: paginationData.totalPages || 0,
+            })
+          } else {
+            setCalls([])
+            setPagination((prev) => ({ ...prev, total: 0, totalPages: 0 }))
+          }
+        } else if (response && Array.isArray(response)) {
+          // Handle non-paginated response (fallback)
           const factoryMachineIds = machines.map((m) => m._id)
-          const factoryCalls = callsData.filter(
+          const factoryCalls = response.filter(
             (call) =>
               call.machines && call.machines.some((machine) => factoryMachineIds.includes(machine._id || machine)),
           )
-
           setCalls(factoryCalls)
-          if (!silent) {
-            setCurrentPage(1)
-          }
+          setPagination((prev) => ({
+            ...prev,
+            total: factoryCalls.length,
+            totalPages: Math.ceil(factoryCalls.length / prev.limit),
+          }))
         } else {
-          console.warn("Invalid calls data received:", callsData)
+          console.warn("Invalid calls data received:", response)
           if (!silent) {
             toast({
               title: "Advertencia",
@@ -123,11 +160,14 @@ const CallDashboard = () => {
               variant: "destructive",
             })
           }
+          setCalls([])
+          setPagination((prev) => ({ ...prev, total: 0, totalPages: 0 }))
         }
       } catch (error) {
         console.error("Error fetching calls:", error)
         if (!silent) {
           setCalls([])
+          setPagination((prev) => ({ ...prev, total: 0, totalPages: 0 }))
           toast({
             title: "Error",
             description: "Error al cargar las llamadas",
@@ -139,7 +179,7 @@ const CallDashboard = () => {
         setRefreshing(false)
       }
     },
-    [filters, machines],
+    [filters, machines, pagination.page, pagination.limit],
   )
 
   /**
@@ -491,7 +531,8 @@ const CallDashboard = () => {
    * Handles applying filters to the calls list
    */
   const applyFilters = useCallback(() => {
-    fetchCalls()
+    setPagination((prev) => ({ ...prev, page: 1 }))
+    fetchCalls(false, 1)
   }, [fetchCalls])
 
   /**
@@ -610,15 +651,22 @@ const CallDashboard = () => {
     })
   }, [activeTab, calls])
 
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredCalls.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const paginatedCalls = filteredCalls.slice(startIndex, endIndex)
+  // Remove these lines:
+  // const totalPages = Math.ceil(filteredCalls.length / itemsPerPage)
+  // const startIndex = (currentPage - 1) * itemsPerPage
+  // const endIndex = startIndex + itemsPerPage
+  // const paginatedCalls = filteredCalls.slice(startIndex, endIndex)
+
+  // Replace with:
+  const paginatedCalls = filteredCalls // Server already returns paginated data
+  const totalPages = pagination.totalPages
+  const startIndex = (pagination.page - 1) * pagination.limit
+  const endIndex = Math.min(startIndex + pagination.limit, pagination.total)
 
   // Handle page change
   const handlePageChange = (page) => {
-    setCurrentPage(page)
+    setPagination((prev) => ({ ...prev, page }))
+    fetchCalls(false, page)
   }
 
   // Handle back navigation
@@ -1125,36 +1173,110 @@ const CallDashboard = () => {
                         href="#"
                         onClick={(e) => {
                           e.preventDefault()
-                          if (currentPage > 1) handlePageChange(currentPage - 1)
+                          if (pagination.page > 1) handlePageChange(pagination.page - 1)
                         }}
-                        className={`h-12 px-4 text-base ${currentPage === 1 ? "pointer-events-none opacity-50" : ""}`}
+                        className={`h-12 px-4 text-base ${pagination.page === 1 ? "pointer-events-none opacity-50" : ""}`}
                       />
                     </PaginationItem>
 
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                      <PaginationItem key={page}>
+                    {/* Show first page if we're not near the beginning */}
+                    {pagination.page > 3 && (
+                      <>
+                        <PaginationItem>
+                          <PaginationLink
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              handlePageChange(1)
+                            }}
+                            className="h-12 px-4 text-base min-w-[48px]"
+                          >
+                            1
+                          </PaginationLink>
+                        </PaginationItem>
+                        {pagination.page > 4 && (
+                          <PaginationItem>
+                            <span className="flex items-center h-12 px-2 text-base">...</span>
+                          </PaginationItem>
+                        )}
+                      </>
+                    )}
+
+                    {/* Show previous page */}
+                    {pagination.page > 1 && (
+                      <PaginationItem>
                         <PaginationLink
                           href="#"
                           onClick={(e) => {
                             e.preventDefault()
-                            handlePageChange(page)
+                            handlePageChange(pagination.page - 1)
                           }}
-                          isActive={currentPage === page}
                           className="h-12 px-4 text-base min-w-[48px]"
                         >
-                          {page}
+                          {pagination.page - 1}
                         </PaginationLink>
                       </PaginationItem>
-                    ))}
+                    )}
+
+                    {/* Current page */}
+                    <PaginationItem>
+                      <PaginationLink
+                        href="#"
+                        onClick={(e) => e.preventDefault()}
+                        isActive={true}
+                        className="h-12 px-4 text-base min-w-[48px]"
+                      >
+                        {pagination.page}
+                      </PaginationLink>
+                    </PaginationItem>
+
+                    {/* Show next page */}
+                    {pagination.page < totalPages && (
+                      <PaginationItem>
+                        <PaginationLink
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            handlePageChange(pagination.page + 1)
+                          }}
+                          className="h-12 px-4 text-base min-w-[48px]"
+                        >
+                          {pagination.page + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    )}
+
+                    {/* Show last page if we're not near the end */}
+                    {pagination.page < totalPages - 2 && (
+                      <>
+                        {pagination.page < totalPages - 3 && (
+                          <PaginationItem>
+                            <span className="flex items-center h-12 px-2 text-base">...</span>
+                          </PaginationItem>
+                        )}
+                        <PaginationItem>
+                          <PaginationLink
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              handlePageChange(totalPages)
+                            }}
+                            className="h-12 px-4 text-base min-w-[48px]"
+                          >
+                            {totalPages}
+                          </PaginationLink>
+                        </PaginationItem>
+                      </>
+                    )}
 
                     <PaginationItem>
                       <PaginationNext
                         href="#"
                         onClick={(e) => {
                           e.preventDefault()
-                          if (currentPage < totalPages) handlePageChange(currentPage + 1)
+                          if (pagination.page < totalPages) handlePageChange(pagination.page + 1)
                         }}
-                        className={`h-12 px-4 text-base ${currentPage === totalPages ? "pointer-events-none opacity-50" : ""}`}
+                        className={`h-12 px-4 text-base ${pagination.page === totalPages ? "pointer-events-none opacity-50" : ""}`}
                       />
                     </PaginationItem>
                   </PaginationContent>
@@ -1165,11 +1287,10 @@ const CallDashboard = () => {
             {/* Pagination Info */}
             <div className="flex flex-col gap-4 mt-6 text-base sm:flex-row sm:justify-between sm:items-center text-muted-foreground">
               <span>
-                Mostrando {startIndex + 1} a {Math.min(endIndex, filteredCalls.length)} de {filteredCalls.length}{" "}
-                llamadas
+                Mostrando {startIndex + 1} a {endIndex} de {pagination.total} llamadas
               </span>
               <span>
-                Página {currentPage} de {totalPages}
+                Página {pagination.page} de {pagination.totalPages}
               </span>
             </div>
           </CardContent>
