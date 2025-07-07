@@ -221,46 +221,6 @@ export default function MainNav() {
                   </div>
                 </NavigationMenuContent>
               </NavigationMenuItem>
-
-              {/* Operations Dropdown */}
-              <NavigationMenuItem>
-                <NavigationMenuTrigger className="h-10">
-                  <PhoneCall className="w-4 h-4 mr-2" />
-                  Operaciones
-                </NavigationMenuTrigger>
-                <NavigationMenuContent>
-                  <div className="grid gap-3 p-6 w-[350px]">
-                    <div className="grid gap-1">
-                      <h4 className="mb-2 text-sm font-medium leading-none">Operaciones Diarias</h4>
-                      <Link
-                        to="/call"
-                        className="block p-3 space-y-1 leading-none no-underline transition-colors rounded-md outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
-                      >
-                        <div className="flex items-center gap-2">
-                          <PhoneCall className="w-4 h-4" />
-                          <div className="text-sm font-medium leading-none">Sistema de Llamadas</div>
-                        </div>
-                        <p className="text-sm leading-snug line-clamp-2 text-muted-foreground">
-                          Gestionar llamadas logísticas
-                        </p>
-                      </Link>
-                      <Link
-                        to="/reports"
-                        className="block p-3 space-y-1 leading-none no-underline transition-colors rounded-md outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
-                      >
-                        <div className="flex items-center gap-2">
-                          <BarChart3 className="w-4 h-4" />
-                          <div className="text-sm font-medium leading-none">Reportes</div>
-                        </div>
-                        <p className="text-sm leading-snug line-clamp-2 text-muted-foreground">
-                          Reportes y estadísticas del sistema
-                        </p>
-                      </Link>
-                    </div>
-                  </div>
-                </NavigationMenuContent>
-              </NavigationMenuItem>
-
               {/* Admin-only Dropdown */}
               {isAdmin && (
                 <NavigationMenuItem>
@@ -477,11 +437,6 @@ export default function MainNav() {
                         <Wrench className="w-5 h-5" />
                         Máquinas
                       </Link>
-
-                      <Separator className="my-2" />
-                      <div className="px-3 py-2">
-                        <h4 className="text-sm font-medium text-muted-foreground">OPERACIONES</h4>
-                      </div>
                     </>
                   )}
 
