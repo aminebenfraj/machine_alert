@@ -15,26 +15,41 @@ import AdminDashboard from "./pages/roleMangement/AdminDashboard"
 import EditUserRoles from "./pages/roleMangement/EditUserRoles"
 import CreateUser from "./pages/roleMangement/CreateUser"
 
-// Home Page
-import Home from "./pages/logistic/call"
-
 // User Pages
 import ProfilePage from "./pages/user/profile-page"
 import SettingsPage from "./pages/user/settings-page"
+
+// Dashboard Pages
+import Dashboard from "./pages/Dashboard"
+import FactoriesView from "./pages/FactoriesView"
+
+// Category Pages
+import ShowCategories from "./pages/categories/ShowCategories"
+import CreateCategory from "./pages/categories/CreateCategory"
+import EditCategory from "./pages/categories/EditCategory"
+
+// Factory Pages
+import ShowFactories from "./pages/factories/ShowFactories"
+import CreateFactory from "./pages/factories/CreateFactory"
+import EditFactory from "./pages/factories/EditFactory"
 
 // Machine Pages
 import ShowMachines from "./pages/gestionStock/machine/ShowMachines"
 import CreateMachine from "./pages/gestionStock/machine/CreateMachine"
 import EditMachine from "./pages/gestionStock/machine/EditMachine"
 
-// Logistic Pages
-import Call from "./pages/logistic/call"
+// Call Pages
+import CallDashboard from "./pages/logistic/call"
+
+// Legacy Call Page (for backward compatibility)
+import LegacyCall from "./pages/logistic/call"
 
 function App() {
   // Define simplified role groups
   const adminRoles = ["Admin"]
   const productionRoles = ["PRODUCCION"]
   const logisticRoles = ["LOGISTICA"]
+  const managementRoles = ["Admin", "PRODUCCION"] // Roles that can manage categories/factories
 
   return (
     <AuthProvider>
@@ -54,8 +69,25 @@ function App() {
           {/* Unauthorized page */}
           <Route path="/unauthorized" element={<Unauthorized />} />
 
-          {/* Home route */}
-          <Route path="/" element={<Home />} />
+          {/* Main Dashboard - Categories View */}
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+
+          {/* Factories View - Shows factories for a category */}
+          <Route path="/factories/:categoryId" element={<FactoriesView />} />
+
+          {/* Calls View - Shows calls for a specific factory */}
+          <Route path="/calls/:factoryId" element={<CallDashboard />} />
+
+          {/* Legacy call route for backward compatibility */}
+          <Route
+            path="/call"
+            element={
+              <ProtectedRoute>
+                <LegacyCall />
+              </ProtectedRoute>
+            }
+          />
 
           {/* User profile routes - accessible by all authenticated users */}
           <Route path="/profile" element={<ProfilePage />} />
@@ -87,7 +119,67 @@ function App() {
             }
           />
 
-          {/* Machine routes - Admin can manage machines */}
+          {/* Category Management Routes - Admin and PRODUCCION */}
+          <Route
+            path="/categories"
+            element={
+              <ProtectedRoute requiredRoles={managementRoles}>
+                <ShowCategories />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/categories/create"
+            element={
+              <ProtectedRoute requiredRoles={managementRoles}>
+                <CreateCategory />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/categories/edit/:id"
+            element={
+              <ProtectedRoute requiredRoles={managementRoles}>
+                <EditCategory />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Factory Management Routes - Admin and PRODUCCION */}
+          <Route
+            path="/factories"
+            element={
+              <ProtectedRoute requiredRoles={managementRoles}>
+                <ShowFactories />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/factories/create/:categoryId"
+            element={
+              <ProtectedRoute requiredRoles={managementRoles}>
+                <CreateFactory />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/factories/create"
+            element={
+              <ProtectedRoute requiredRoles={managementRoles}>
+                <CreateFactory />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/factories/edit/:id"
+            element={
+              <ProtectedRoute requiredRoles={managementRoles}>
+                <EditFactory />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Machine routes - All authenticated users can view, Admin and PRODUCCION can manage */}
           <Route
             path="/machines"
             element={
@@ -97,35 +189,33 @@ function App() {
             }
           />
           <Route
+            path="/machines/:factoryId"
+            element={
+              <ProtectedRoute>
+                <ShowMachines />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/machines/create"
             element={
-              <ProtectedRoute requiredRoles={adminRoles}>
+              <ProtectedRoute requiredRoles={managementRoles}>
                 <CreateMachine />
               </ProtectedRoute>
             }
           />
           <Route
-            path="machines/edit/:id"
+            path="/machines/edit/:id"
             element={
-              <ProtectedRoute requiredRoles={adminRoles}>
+              <ProtectedRoute requiredRoles={managementRoles}>
                 <EditMachine />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Call routes - PRODUCCION can create calls, LOGISTICA can view and complete them */}
-          <Route
-            path="/call"
-            element={
-              <ProtectedRoute>
-                <Call />
               </ProtectedRoute>
             }
           />
         </Route>
 
-        {/* Catch-all route - redirect to home */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Catch-all route - redirect to dashboard */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </AuthProvider>
   )

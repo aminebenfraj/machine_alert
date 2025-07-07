@@ -1,9 +1,11 @@
 "use client"
 import { Trash2 } from "lucide-react"
 import { useState, useEffect, useCallback, useMemo } from "react"
+import { useParams, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { getCalls, createCall, completeCall, checkExpiredCalls, exportCalls, deleteCall } from "@/apis/logistic/callApi"
-import { getAllMachines } from "@/apis/gestionStockApi/machineApi"
+import { getMachinesByFactory } from "@/apis/gestionStockApi/machineApi"
+import { getFactoryById } from "@/apis/factoryApi"
 import { useAuth } from "@/context/AuthContext"
 import { CallTimer } from "@/components/CallTimer"
 import { CallStats } from "@/components/CallStats"
@@ -38,22 +40,27 @@ import {
   Info,
   RotateCw,
   ChevronDown,
+  ArrowLeft,
+  Building2,
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 /**
- * Call Dashboard Component - Optimized for Tablet
+ * Call Dashboard Component - Factory Specific
  *
- * Displays and manages calls between production and logistics teams
+ * Displays and manages calls for a specific factory
  */
 const CallDashboard = () => {
   // Get the current user from auth context
   const { user } = useAuth()
+  const { factoryId } = useParams()
+  const navigate = useNavigate()
 
   const [selectedMachine, setSelectedMachine] = useState(null)
-  const [selectedMachineDuration, setSelectedMachineDuration] = useState(90) // Default duration from selected machine
+  const [selectedMachineDuration, setSelectedMachineDuration] = useState(90)
   const [machines, setMachines] = useState([])
+  const [factory, setFactory] = useState(null)
   const [calls, setCalls] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -79,8 +86,7 @@ const CallDashboard = () => {
   const isProduction = useMemo(() => user?.roles?.includes("PRODUCCION"), [user?.roles])
 
   /**
-   * Fetches calls from the API with optional filters
-   * @param {boolean} silent - Whether to show loading indicators
+   * Fetches calls from the API with factory filter
    */
   const fetchCalls = useCallback(
     async (silent = false) => {
@@ -88,7 +94,7 @@ const CallDashboard = () => {
         if (!silent) setLoading(true)
         setRefreshing(true)
 
-        // Convert filter values for API
+        // Add factory filter to API filters
         const apiFilters = { ...filters }
         if (apiFilters.machineId === "all") delete apiFilters.machineId
         if (apiFilters.status === "all") delete apiFilters.status
@@ -96,16 +102,20 @@ const CallDashboard = () => {
 
         const callsData = await getCalls(apiFilters)
 
-        // Only update calls if we got valid data
+        // Filter calls by factory (client-side filtering for machines in this factory)
         if (callsData && Array.isArray(callsData)) {
-          setCalls(callsData)
-          // Reset to first page when filters change (only for non-silent calls)
+          const factoryMachineIds = machines.map((m) => m._id)
+          const factoryCalls = callsData.filter(
+            (call) =>
+              call.machines && call.machines.some((machine) => factoryMachineIds.includes(machine._id || machine)),
+          )
+
+          setCalls(factoryCalls)
           if (!silent) {
             setCurrentPage(1)
           }
         } else {
           console.warn("Invalid calls data received:", callsData)
-          // Don't clear existing data on invalid response
           if (!silent) {
             toast({
               title: "Advertencia",
@@ -116,8 +126,6 @@ const CallDashboard = () => {
         }
       } catch (error) {
         console.error("Error fetching calls:", error)
-
-        // Only clear calls and show error for non-silent requests
         if (!silent) {
           setCalls([])
           toast({
@@ -125,58 +133,52 @@ const CallDashboard = () => {
             description: "Error al cargar las llamadas",
             variant: "destructive",
           })
-        } else {
-          // For silent requests, just log the error but don't clear data
-          console.warn("Silent fetch failed, keeping existing data")
         }
       } finally {
         setLoading(false)
         setRefreshing(false)
       }
     },
-    [filters],
+    [filters, machines],
   )
 
   /**
-   * Fetches machines from the API
+   * Fetches factory and machines data
    */
-  const fetchMachines = useCallback(async () => {
-    try {
-      console.log("Fetching machines...")
-      const response = await getAllMachines()
+  const fetchFactoryData = useCallback(async () => {
+    if (!factoryId) return
 
-      // Check if response is directly an array (not wrapped in a data property)
-      if (Array.isArray(response)) {
-        // Only show active machines in the dropdown
-        const activeMachines = response.filter((machine) => machine.status === "active")
-        setMachines(activeMachines)
-      }
-      // Check if response has a data property that is an array
-      else if (response && response.data && Array.isArray(response.data)) {
-        // Only show active machines in the dropdown
-        const activeMachines = response.data.filter((machine) => machine.status === "active")
-        setMachines(activeMachines)
-      } else {
-        console.warn("No valid machines data found in response")
-        setMachines([])
-      }
+    try {
+      const [factoryData, machinesData] = await Promise.all([
+        getFactoryById(factoryId),
+        getMachinesByFactory(factoryId),
+      ])
+
+      setFactory(factoryData)
+
+      // Only show active machines in the dropdown
+      const activeMachines = (machinesData || []).filter((machine) => machine.status === "active")
+      setMachines(activeMachines)
     } catch (error) {
-      console.error("Error fetching machines:", error)
-      setMachines([])
+      console.error("Error fetching factory data:", error)
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los datos de la fábrica",
+        variant: "destructive",
+      })
+      navigate("/dashboard")
     }
-  }, [])
+  }, [factoryId, navigate])
 
   // Update the remaining time for all calls
   const updateRemainingTime = useCallback(() => {
     setCalls((prevCalls) => {
-      // Don't update if there are no calls
       if (!prevCalls || prevCalls.length === 0) {
         return prevCalls
       }
 
       return prevCalls.map((call) => {
         if (call.status === "Pendiente") {
-          // If timer has reached zero
           if (call.remainingTime <= 1) {
             return {
               ...call,
@@ -185,7 +187,6 @@ const CallDashboard = () => {
             }
           }
 
-          // Otherwise, decrement the timer
           return {
             ...call,
             remainingTime: call.remainingTime - 1,
@@ -198,22 +199,18 @@ const CallDashboard = () => {
 
   /**
    * Handles checking for expired calls
-   * @param {boolean} silent - Whether to show loading indicators and toasts
    */
   const handleCheckExpiredCalls = useCallback(
     async (silent = false) => {
       try {
         if (!silent) setCheckingExpired(true)
 
-        // Call the API to check expired calls
         const response = await checkExpiredCalls()
 
-        // Refresh the calls list only if the expired check was successful
         if (response) {
           await fetchCalls(true)
         }
 
-        // Show success toast only if not silent
         if (!silent) {
           toast({
             title: "Verificación completada",
@@ -223,17 +220,12 @@ const CallDashboard = () => {
         }
       } catch (error) {
         console.error("Error checking expired calls:", error)
-
-        // Show error toast only if not silent
         if (!silent) {
           toast({
             title: "Error",
             description: "No se pudieron verificar las llamadas expiradas",
             variant: "destructive",
           })
-        } else {
-          // For silent requests, just log the error
-          console.warn("Silent expired check failed")
         }
       } finally {
         if (!silent) setCheckingExpired(false)
@@ -243,33 +235,37 @@ const CallDashboard = () => {
   )
 
   useEffect(() => {
-    fetchCalls()
-    fetchMachines()
-
-    // Set up interval to update remaining time every second
-    const timerInterval = setInterval(() => {
-      updateRemainingTime()
-    }, 1000)
-
-    // Set up interval to check expired calls and refresh data every 15 seconds
-    const refreshInterval = setInterval(() => {
-      // Only refresh if user is active and page is visible
-      if (document.visibilityState === "visible") {
-        if (isLogistics) {
-          // Check expired calls in the background (silently)
-          handleCheckExpiredCalls(true)
-        } else {
-          // For non-logistics users, just refresh the calls data
-          fetchCalls(true)
-        }
-      }
-    }, 15000) // 15 seconds
-
-    return () => {
-      clearInterval(timerInterval)
-      clearInterval(refreshInterval)
+    if (factoryId) {
+      fetchFactoryData()
     }
-  }, [fetchCalls, fetchMachines, handleCheckExpiredCalls, isLogistics, updateRemainingTime])
+  }, [factoryId, fetchFactoryData])
+
+  useEffect(() => {
+    if (machines.length > 0) {
+      fetchCalls()
+
+      // Set up interval to update remaining time every second
+      const timerInterval = setInterval(() => {
+        updateRemainingTime()
+      }, 1000)
+
+      // Set up interval to check expired calls and refresh data every 15 seconds
+      const refreshInterval = setInterval(() => {
+        if (document.visibilityState === "visible") {
+          if (isLogistics) {
+            handleCheckExpiredCalls(true)
+          } else {
+            fetchCalls(true)
+          }
+        }
+      }, 15000)
+
+      return () => {
+        clearInterval(timerInterval)
+        clearInterval(refreshInterval)
+      }
+    }
+  }, [machines, fetchCalls, handleCheckExpiredCalls, isLogistics, updateRemainingTime])
 
   /**
    * Handles creating a new call to logistics
@@ -288,50 +284,38 @@ const CallDashboard = () => {
       setCreatingCall(true)
       console.log("Creating call for machine:", selectedMachine)
 
-      // Find the selected machine to get its name and duration
       const selectedMachineObj = machines.find((m) => m._id === selectedMachine)
 
-      // Create a new call with the machine ID, current date, user, and duration from the machine
       const callData = {
         machineId: selectedMachine,
         callTime: new Date(),
         date: new Date(),
         status: "Pendiente",
         createdBy: user?.roles?.includes("PRODUCCION") ? "PRODUCCION" : "LOGISTICA",
-        // No need to specify duration as it will use the machine's duration
       }
 
       console.log("Call data:", callData)
       const response = await createCall(callData)
 
-      // Get the created call data
       let newCall
       if (response && response.data) {
         newCall = response.data
-
-        // Ensure the new call has a remainingTime property
         if (!newCall.remainingTime && newCall.remainingTime !== 0) {
-          newCall.remainingTime = (newCall.duration || selectedMachineObj.duration || 90) * 60 // Use call's duration in seconds
+          newCall.remainingTime = (newCall.duration || selectedMachineObj.duration || 90) * 60
         }
       } else {
         newCall = {
-          _id: Date.now().toString(), // Fallback ID if not provided by API
+          _id: Date.now().toString(),
           ...callData,
-          remainingTime: (selectedMachineObj.duration || 90) * 60, // Use machine's duration in seconds
+          remainingTime: (selectedMachineObj.duration || 90) * 60,
           machines: [{ name: selectedMachineObj?.name || "Máquina seleccionada" }],
         }
       }
 
-      // Add the new call to the calls array
       setCalls((prevCalls) => [newCall, ...prevCalls])
-
-      // Reset the selected machine
       setSelectedMachine(null)
-
-      // Refresh the calls list to ensure proper rendering of the timer
       fetchCalls(true)
 
-      // Show success toast
       toast({
         title: "Llamada creada",
         description: "Se ha creado una llamada a LOGISTICA exitosamente",
@@ -339,8 +323,6 @@ const CallDashboard = () => {
       })
     } catch (error) {
       console.error("Error creating call:", error)
-
-      // Show error toast
       toast({
         title: "Error",
         description: "No se pudo crear la llamada a LOGISTICA",
@@ -368,51 +350,40 @@ const CallDashboard = () => {
       setCreatingMoleCall(true)
       console.log("Creating mole call for machine:", selectedMachine)
 
-      // Find the selected machine to get its name
       const selectedMachineObj = machines.find((m) => m._id === selectedMachine)
 
-      // Create a new mole call with 30 minutes duration
       const callData = {
         machineId: selectedMachine,
         callTime: new Date(),
         date: new Date(),
         status: "Pendiente",
         createdBy: user?.roles?.includes("PRODUCCION") ? "PRODUCCION" : "LOGISTICA",
-        duration: 30, // Override to 30 minutes for mole calls
-        callType: "mole", // Mark as mole call
+        duration: 30,
+        callType: "mole",
       }
 
       console.log("Mole call data:", callData)
       const response = await createCall(callData)
 
-      // Get the created call data
       let newCall
       if (response && response.data) {
         newCall = response.data
-
-        // Ensure the new call has a remainingTime property (30 minutes = 1800 seconds)
         if (!newCall.remainingTime && newCall.remainingTime !== 0) {
-          newCall.remainingTime = 30 * 60 // 30 minutes in seconds
+          newCall.remainingTime = 30 * 60
         }
       } else {
         newCall = {
-          _id: Date.now().toString(), // Fallback ID if not provided by API
+          _id: Date.now().toString(),
           ...callData,
-          remainingTime: 30 * 60, // 30 minutes in seconds
+          remainingTime: 30 * 60,
           machines: [{ name: selectedMachineObj?.name || "Máquina seleccionada" }],
         }
       }
 
-      // Add the new call to the calls array
       setCalls((prevCalls) => [newCall, ...prevCalls])
-
-      // Reset the selected machine
       setSelectedMachine(null)
-
-      // Refresh the calls list to ensure proper rendering of the timer
       fetchCalls(true)
 
-      // Show success toast
       toast({
         title: "Llamada Cambio molde creada",
         description: "Se ha creado una llamada de Cambio molde (30 min) a LOGISTICA exitosamente",
@@ -420,8 +391,6 @@ const CallDashboard = () => {
       })
     } catch (error) {
       console.error("Error creating mole call:", error)
-
-      // Show error toast
       toast({
         title: "Error",
         description: "No se pudo crear la llamada de Cambio molde a LOGISTICA",
@@ -434,14 +403,12 @@ const CallDashboard = () => {
 
   /**
    * Handles selecting a machine from the dropdown
-   * @param {string} machineId - The ID of the selected machine
    */
   const handleMachineSelect = useCallback(
     (machineId) => {
       console.log("Machine selected:", machineId)
       setSelectedMachine(machineId)
 
-      // Find the selected machine to get its duration
       const selectedMachineObj = machines.find((m) => m._id === machineId)
       if (selectedMachineObj) {
         setSelectedMachineDuration(selectedMachineObj.duration || 90)
@@ -452,25 +419,17 @@ const CallDashboard = () => {
 
   /**
    * Handles marking a call as completed
-   * @param {string} id - The ID of the call to complete
    */
   const handleCompleteCall = useCallback(
     async (id) => {
       try {
-        // Set loading state for this specific call
         setCompletingCall((prev) => ({ ...prev, [id]: true }))
 
-        // Get the current time for completion
         const completionTime = new Date()
-
-        // Get the user role from the auth context
         const userRole = user?.roles?.includes("LOGISTICA") ? "LOGISTICA" : "PRODUCCION"
 
-        // Call the API to update the server FIRST
-        // Pass the user role to ensure proper authorization
         await completeCall(id, userRole)
 
-        // Then update the local state after successful API call
         setCalls((prevCalls) =>
           prevCalls.map((call) =>
             call._id === id
@@ -478,13 +437,12 @@ const CallDashboard = () => {
                   ...call,
                   status: "Realizada",
                   completionTime: completionTime,
-                  remainingTime: 0, // Explicitly set remaining time to 0
+                  remainingTime: 0,
                 }
               : call,
           ),
         )
 
-        // Show success toast
         toast({
           title: "Llamada completada",
           description: "La llamada ha sido marcada como completada",
@@ -492,19 +450,14 @@ const CallDashboard = () => {
         })
       } catch (error) {
         console.error("Error completing call:", error)
-
-        // Show error toast with more specific message
         const errorMessage = error.response?.data?.message || "No se pudo completar la llamada"
         toast({
           title: "Error",
           description: errorMessage,
           variant: "destructive",
         })
-
-        // Refresh calls to ensure UI is in sync with server
         fetchCalls(true)
       } finally {
-        // Clear loading state for this call
         setCompletingCall((prev) => {
           const newState = { ...prev }
           delete newState[id]
@@ -519,7 +472,6 @@ const CallDashboard = () => {
    * Handles exporting calls to Excel
    */
   const handleExportToExcel = useCallback(() => {
-    // Convert filter values for API
     const apiFilters = { ...filters }
     if (apiFilters.machineId === "all") delete apiFilters.machineId
     if (apiFilters.status === "all") delete apiFilters.status
@@ -530,8 +482,6 @@ const CallDashboard = () => {
 
   /**
    * Handles changing a filter value
-   * @param {string} name - The name of the filter
-   * @param {string} value - The new value for the filter
    */
   const handleFilterChange = useCallback((name, value) => {
     setFilters((prev) => ({ ...prev, [name]: value }))
@@ -546,7 +496,6 @@ const CallDashboard = () => {
 
   /**
    * Handles deleting a call
-   * @param {string} id - The ID of the call to delete
    */
   const handleDeleteCall = useCallback(
     async (id) => {
@@ -560,7 +509,7 @@ const CallDashboard = () => {
           description: "La llamada ha sido eliminada correctamente",
           variant: "success",
         })
-        fetchCalls() // Refresh the list after deletion
+        fetchCalls()
       } catch (error) {
         console.error("Error al eliminar la llamada:", error)
         toast({
@@ -581,17 +530,14 @@ const CallDashboard = () => {
     if (!confirm) return
 
     try {
-      // Get all calls except the first 10
       const callsToDelete = calls.slice(10)
 
-      // Show loading toast
       toast({
         title: "Eliminando llamadas",
         description: `Eliminando ${callsToDelete.length} llamadas...`,
         variant: "default",
       })
 
-      // Delete each call
       let deletedCount = 0
       for (const call of callsToDelete) {
         try {
@@ -602,19 +548,15 @@ const CallDashboard = () => {
         }
       }
 
-      // Show success toast
       toast({
         title: "Llamadas eliminadas",
         description: `Se han eliminado ${deletedCount} llamadas correctamente`,
         variant: "success",
       })
 
-      // Refresh the calls list
       fetchCalls()
     } catch (error) {
       console.error("Error al eliminar las llamadas:", error)
-
-      // Show error toast
       toast({
         title: "Error",
         description: "Ocurrió un error al eliminar las llamadas",
@@ -679,6 +621,15 @@ const CallDashboard = () => {
     setCurrentPage(page)
   }
 
+  // Handle back navigation
+  const handleBackToFactories = () => {
+    if (factory?.categoryId) {
+      navigate(`/factories/${factory.categoryId._id || factory.categoryId}`)
+    } else {
+      navigate("/dashboard")
+    }
+  }
+
   // If user is not authenticated or doesn't have either role, show loading or unauthorized message
   if (!user) {
     return (
@@ -714,7 +665,21 @@ const CallDashboard = () => {
     >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight">Panel de Control</h1>
+          <div className="flex items-center gap-2 mb-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleBackToFactories}
+              className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Volver a Fábricas
+            </Button>
+          </div>
+          <h1 className="flex items-center gap-2 text-4xl font-bold tracking-tight">
+            <Building2 className="w-8 h-8 text-primary" />
+            {factory?.name || "Fábrica"}
+          </h1>
           <div className="flex flex-col gap-4 mt-3 sm:flex-row sm:items-center">
             <div className="flex items-center">
               Usuario:{" "}
@@ -726,6 +691,14 @@ const CallDashboard = () => {
               <Calendar className="w-5 h-5 mr-2" />
               {new Date().toLocaleDateString()}
             </div>
+            {factory?.categoryId && (
+              <div className="flex items-center text-lg">
+                <span className="text-muted-foreground">Categoría: </span>
+                <Badge variant="secondary" className="ml-2">
+                  {factory.categoryId.name}
+                </Badge>
+              </div>
+            )}
           </div>
         </div>
 
@@ -772,7 +745,7 @@ const CallDashboard = () => {
             <CardHeader className="pb-4 bg-blue-100">
               <CardTitle className="text-2xl text-blue-800">Llamar a LOGISTICA</CardTitle>
               <CardDescription className="text-lg text-blue-700">
-                Selecciona una máquina para crear una llamada a LOGISTICA
+                Selecciona una máquina de esta fábrica para crear una llamada a LOGISTICA
               </CardDescription>
             </CardHeader>
             <CardContent className="p-8 bg-gradient-to-r from-blue-50 to-indigo-50">
@@ -803,7 +776,7 @@ const CallDashboard = () => {
                             ))
                           ) : (
                             <SelectItem value="no-machines" disabled className="py-3 text-lg">
-                              No hay máquinas disponibles
+                              No hay máquinas disponibles en esta fábrica
                             </SelectItem>
                           )}
                         </SelectContent>
@@ -863,7 +836,7 @@ const CallDashboard = () => {
       >
         <Card>
           <CardHeader className="flex flex-col pb-4 space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
-            <CardTitle className="text-2xl">Registro de Llamadas</CardTitle>
+            <CardTitle className="text-2xl">Registro de Llamadas - {factory?.name}</CardTitle>
             <div className="flex flex-wrap gap-3">
               <TooltipProvider>
                 <Tooltip>
@@ -873,7 +846,7 @@ const CallDashboard = () => {
                         variant="outline"
                         size="lg"
                         onClick={handleExportToExcel}
-                        className="flex items-center h-12 gap-2 px-4 text-base"
+                        className="flex items-center h-12 gap-2 px-4 text-base bg-transparent"
                       >
                         <Download className="w-5 h-5" />
                         Exportar
@@ -893,7 +866,7 @@ const CallDashboard = () => {
                         variant="outline"
                         size="lg"
                         onClick={handleDeleteAllExceptFirst10}
-                        className="flex items-center h-12 gap-2 px-4 text-base"
+                        className="flex items-center h-12 gap-2 px-4 text-base bg-transparent"
                       >
                         <Trash2 className="w-5 h-5" />
                         Eliminar excepto 10
@@ -909,7 +882,11 @@ const CallDashboard = () => {
               {/* Filters Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="lg" className="flex items-center h-12 gap-2 px-4 text-base">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="flex items-center h-12 gap-2 px-4 text-base bg-transparent"
+                  >
                     <Filter className="w-5 h-5" />
                     Filtros
                     <ChevronDown className="w-4 h-4" />
@@ -1034,7 +1011,7 @@ const CallDashboard = () => {
                   ) : paginatedCalls.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={9} className="h-32 text-lg text-center text-muted-foreground">
-                        No hay llamadas registradas
+                        No hay llamadas registradas para esta fábrica
                       </TableCell>
                     </TableRow>
                   ) : (

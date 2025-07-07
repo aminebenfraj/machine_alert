@@ -3,41 +3,96 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
-import { Button } from "../../../components/ui/button"
-import { Input } from "../../../components/ui/input"
-import { Textarea } from "../../../components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../../components/ui/card"
-import { getMachineById, updateMachine } from "../../../apis/gestionStockApi/machineApi"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { getMachineById, updateMachine } from "@/apis/gestionStockApi/machineApi"
+import { getAllFactories } from "@/apis/factoryApi"
+import { getAllCategories } from "@/apis/categoryApi"
 import { Save, ArrowLeft } from "lucide-react"
+import { toast } from "@/hooks/use-toast"
 
 const EditMachine = () => {
   const [machine, setMachine] = useState({
     name: "",
     description: "",
     status: "active",
-    duration: 90, // Default duration is 90 minutes
+    duration: 90,
+    factoryId: "",
   })
+  const [factories, setFactories] = useState([])
+  const [categories, setCategories] = useState([])
+  const [selectedCategory, setSelectedCategory] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const { id } = useParams()
   const navigate = useNavigate()
 
   useEffect(() => {
     if (id) {
       fetchMachine()
+      fetchInitialData()
     }
   }, [id])
+
+  useEffect(() => {
+    if (selectedCategory) {
+      fetchFactoriesByCategory()
+    } else {
+      fetchAllFactories()
+    }
+  }, [selectedCategory])
 
   const fetchMachine = async () => {
     try {
       const data = await getMachineById(id)
       setMachine({
         ...data,
-        duration: data.duration || 90, // Ensure duration has a default value
+        duration: data.duration || 90,
+        factoryId: data.factoryId?._id || data.factoryId || "",
       })
+
+      // Set the category filter based on the machine's factory
+      if (data.factoryId?.categoryId) {
+        setSelectedCategory(data.factoryId.categoryId._id || data.factoryId.categoryId)
+      }
     } catch (error) {
       console.error("Failed to fetch machine:", error)
-      alert("Failed to fetch machine. Redirecting to machines list.")
+      toast({
+        title: "Error",
+        description: "No se pudo cargar la máquina",
+        variant: "destructive",
+      })
       navigate("/machines")
+    }
+  }
+
+  const fetchInitialData = async () => {
+    try {
+      const categoriesData = await getAllCategories()
+      setCategories(categoriesData || [])
+      await fetchAllFactories()
+    } catch (error) {
+      console.error("Failed to fetch initial data:", error)
+    }
+  }
+
+  const fetchAllFactories = async () => {
+    try {
+      const factoriesData = await getAllFactories()
+      setFactories(factoriesData || [])
+    } catch (error) {
+      console.error("Failed to fetch factories:", error)
+    }
+  }
+
+  const fetchFactoriesByCategory = async () => {
+    try {
+      const factoriesData = await getAllFactories(selectedCategory)
+      setFactories(factoriesData || [])
+    } catch (error) {
+      console.error("Failed to fetch factories by category:", error)
     }
   }
 
@@ -49,13 +104,34 @@ const EditMachine = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
+    if (!machine.factoryId) {
+      toast({
+        title: "Error",
+        description: "Por favor selecciona una fábrica",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+
     try {
       await updateMachine(id, machine)
-      alert("Machine updated successfully!")
+      toast({
+        title: "Éxito",
+        description: "Máquina actualizada correctamente",
+        variant: "success",
+      })
       navigate("/machines")
     } catch (error) {
       console.error("Failed to update machine:", error)
-      alert("Failed to update machine. Please try again.")
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar la máquina",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -63,13 +139,13 @@ const EditMachine = () => {
     <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-zinc-900">
       <Card className="w-full max-w-md bg-white shadow-lg dark:bg-zinc-800">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Edit Machine</CardTitle>
+          <CardTitle className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Editar Máquina</CardTitle>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="name" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Machine Name
+                Nombre de la Máquina
               </label>
               <Input
                 id="name"
@@ -78,12 +154,13 @@ const EditMachine = () => {
                 onChange={handleChange}
                 required
                 className="w-full"
-                placeholder="Enter machine name"
+                placeholder="Ingresa el nombre de la máquina"
               />
             </div>
+
             <div className="space-y-2">
               <label htmlFor="description" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Description
+                Descripción
               </label>
               <Textarea
                 id="description"
@@ -91,13 +168,58 @@ const EditMachine = () => {
                 value={machine.description}
                 onChange={handleChange}
                 className="w-full"
-                placeholder="Enter machine description"
+                placeholder="Ingresa la descripción de la máquina"
                 rows={3}
               />
             </div>
+
+            <div className="space-y-2">
+              <label htmlFor="category" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Categoría (Filtro)
+              </label>
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Seleccionar categoría para filtrar fábricas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las categorías</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category._id} value={category._id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="factoryId" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Fábrica *
+              </label>
+              <Select
+                name="factoryId"
+                value={machine.factoryId}
+                onValueChange={(value) => handleChange({ target: { name: "factoryId", value } })}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Seleccionar fábrica" />
+                </SelectTrigger>
+                <SelectContent>
+                  {factories.map((factory) => (
+                    <SelectItem key={factory._id} value={factory._id}>
+                      {factory.name}
+                      {factory.categoryId && (
+                        <span className="ml-2 text-sm text-muted-foreground">({factory.categoryId.name})</span>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <label htmlFor="duration" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Duration (minutes)
+                Duración (minutos)
               </label>
               <Input
                 id="duration"
@@ -115,12 +237,13 @@ const EditMachine = () => {
                 }
                 required
                 className="w-full"
-                placeholder="Enter default duration in minutes"
+                placeholder="Ingresa la duración por defecto en minutos"
               />
             </div>
+
             <div className="space-y-2">
               <label htmlFor="status" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Status
+                Estado
               </label>
               <Select
                 name="status"
@@ -128,12 +251,12 @@ const EditMachine = () => {
                 onValueChange={(value) => handleChange({ target: { name: "status", value } })}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select status" />
+                  <SelectValue placeholder="Seleccionar estado" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                  <SelectItem value="maintenance">Maintenance</SelectItem>
+                  <SelectItem value="active">Activa</SelectItem>
+                  <SelectItem value="inactive">Inactiva</SelectItem>
+                  <SelectItem value="maintenance">Mantenimiento</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -142,16 +265,25 @@ const EditMachine = () => {
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Button type="button" variant="outline" onClick={() => navigate("/machines")}>
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                Cancel
+                Cancelar
               </Button>
             </motion.div>
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Button
                 type="submit"
                 className="text-white bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+                disabled={isSubmitting}
               >
-                <Save className="w-4 h-4 mr-2" />
-                Update Machine
+                {isSubmitting ? (
+                  <>
+                    <span className="mr-2">Actualizando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Actualizar Máquina
+                  </>
+                )}
               </Button>
             </motion.div>
           </CardFooter>

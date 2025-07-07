@@ -7,6 +7,8 @@ const authRoutes = require("./routes/authRoutes")
 const adminRoutes = require("./routes/adminRoutes")
 const machineRoutes = require("./routes/gestionStockRoutes/machineRoutes")
 const callRoutes = require("./routes/logistic/callRoutes")
+const categoryRoutes = require("./routes/categoryRoutes")
+const factoryRoutes = require("./routes/factoryRoutes")
 const { initCronJobs } = require("./crone/callStatusCron")
 
 const app = express()
@@ -48,6 +50,8 @@ app.use("/api/auth", authRoutes)
 app.use("/api/admin", adminRoutes)
 app.use("/api/machines", machineRoutes)
 app.use("/api/calls", callRoutes) // Changed from "call" to "calls" for consistency
+app.use("/api/categories", categoryRoutes) // Changed from "call" to "calls" for consistency
+app.use("/api/factories", factoryRoutes) // Changed from "call" to "calls" for consistency
 
 // Error handling middleware
 app.use((err, req, res, next) => {

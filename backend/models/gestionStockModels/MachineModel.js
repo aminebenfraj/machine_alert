@@ -6,7 +6,12 @@ const machineSchema = new Schema(
     name: { type: String, required: true, unique: true },
     description: { type: String, default: "No description provided." },
     status: { type: String, enum: ["active", "inactive", "maintenance"], default: "active" },
-    duration: { type: Number, default: 90 }, // Add duration field with default of 90 minutes
+    duration: { type: Number, default: 90 }, // Duration field with default of 90 minutes
+    factoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Factory",
+      required: true,
+    },
   },
   { timestamps: true },
 )

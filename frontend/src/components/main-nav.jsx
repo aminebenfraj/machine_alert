@@ -59,7 +59,7 @@ export default function MainNav() {
       ? [
           {
             name: "Call Dashboard",
-            path: "/call",
+            path: "/",
             icon: PhoneCall,
             roles: ["PRODUCCION", "LOGISTICA"],
           },
@@ -108,7 +108,7 @@ export default function MainNav() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex items-center justify-between h-16 px-4">
         {/* Logo */}
-        <Link to={user ? "/call" : "/"} className="flex items-center gap-2">
+        <Link to={"/"} className="flex items-center gap-2">
           <img src="/novares-logo.webp" alt="Novares" className="h-8" />
         </Link>
 
