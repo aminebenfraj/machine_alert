@@ -76,27 +76,64 @@ exports.updateCategory = async (req, res) => {
   }
 }
 
-// Delete a category
+// Delete a category with cascading deletes
 exports.deleteCategory = async (req, res) => {
   try {
     const Factory = require("../models/FactoryModel")
+    const Machine = require("../models/gestionStockModels/MachineModel")
+    const Call = require("../models/logistic/CallModel")
 
-    // Check if category has associated factories
-    const factoriesCount = await Factory.countDocuments({ categoryId: req.params.id })
-    if (factoriesCount > 0) {
-      return res.status(400).json({
-        message: "Cannot delete category. It has associated factories.",
-      })
-    }
+    const categoryId = req.params.id
 
-    const deletedCategory = await Category.findByIdAndDelete(req.params.id)
-
-    if (!deletedCategory) {
+    // Check if category exists
+    const category = await Category.findById(categoryId)
+    if (!category) {
       return res.status(404).json({ message: "Category not found." })
     }
 
-    res.status(200).json({ message: "Category deleted successfully." })
+    // Find all factories associated with this category
+    const factories = await Factory.find({ categoryId })
+    const factoryIds = factories.map((factory) => factory._id)
+
+    if (factoryIds.length > 0) {
+      // Find all machines associated with these factories
+      const machines = await Machine.find({ factoryId: { $in: factoryIds } })
+      const machineIds = machines.map((machine) => machine._id)
+
+      if (machineIds.length > 0) {
+        // Delete all calls associated with these machines
+        await Call.deleteMany({ machines: { $in: machineIds } })
+        console.log(`Deleted calls associated with machines: ${machineIds}`)
+
+        // Delete all machines associated with these factories
+        await Machine.deleteMany({ factoryId: { $in: factoryIds } })
+        console.log(`Deleted machines: ${machineIds}`)
+      }
+
+      // Delete all factories associated with this category
+      await Factory.deleteMany({ categoryId })
+      console.log(`Deleted factories: ${factoryIds}`)
+    }
+
+    // Finally, delete the category
+    await Category.findByIdAndDelete(categoryId)
+
+    res.status(200).json({
+      message: "Category and all associated records deleted successfully.",
+      deletedRecords: {
+        category: 1,
+        factories: factoryIds.length,
+        machines: factoryIds.length > 0 ? await Machine.countDocuments({ factoryId: { $in: factoryIds } }) : 0,
+        calls:
+          factoryIds.length > 0
+            ? await Call.countDocuments({
+                machines: { $in: await Machine.find({ factoryId: { $in: factoryIds } }).distinct("_id") },
+              })
+            : 0,
+      },
+    })
   } catch (error) {
+    console.error("Error deleting category:", error)
     res.status(500).json({ message: "Server error while deleting category.", error })
   }
 }

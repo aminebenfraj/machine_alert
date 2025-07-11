@@ -103,27 +103,47 @@ exports.updateFactory = async (req, res) => {
   }
 }
 
-// Delete a factory
+// Delete a factory with cascading deletes
 exports.deleteFactory = async (req, res) => {
   try {
     const Machine = require("../models/gestionStockModels/MachineModel")
+    const Call = require("../models/logistic/CallModel")
 
-    // Check if factory has associated machines
-    const machinesCount = await Machine.countDocuments({ factoryId: req.params.id })
-    if (machinesCount > 0) {
-      return res.status(400).json({
-        message: "Cannot delete factory. It has associated machines.",
-      })
-    }
+    const factoryId = req.params.id
 
-    const deletedFactory = await Factory.findByIdAndDelete(req.params.id)
-
-    if (!deletedFactory) {
+    // Check if factory exists
+    const factory = await Factory.findById(factoryId)
+    if (!factory) {
       return res.status(404).json({ message: "Factory not found." })
     }
 
-    res.status(200).json({ message: "Factory deleted successfully." })
+    // Find all machines associated with this factory
+    const machines = await Machine.find({ factoryId })
+    const machineIds = machines.map((machine) => machine._id)
+
+    if (machineIds.length > 0) {
+      // Delete all calls associated with these machines
+      const deletedCalls = await Call.deleteMany({ machines: { $in: machineIds } })
+      console.log(`Deleted ${deletedCalls.deletedCount} calls associated with machines: ${machineIds}`)
+
+      // Delete all machines associated with this factory
+      const deletedMachines = await Machine.deleteMany({ factoryId })
+      console.log(`Deleted ${deletedMachines.deletedCount} machines associated with factory: ${factoryId}`)
+    }
+
+    // Finally, delete the factory
+    await Factory.findByIdAndDelete(factoryId)
+
+    res.status(200).json({
+      message: "Factory and all associated records deleted successfully.",
+      deletedRecords: {
+        factory: 1,
+        machines: machineIds.length,
+        calls: machineIds.length > 0 ? await Call.countDocuments({ machines: { $in: machineIds } }) : 0,
+      },
+    })
   } catch (error) {
+    console.error("Error deleting factory:", error)
     res.status(500).json({ message: "Server error while deleting factory.", error })
   }
 }

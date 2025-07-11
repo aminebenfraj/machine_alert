@@ -151,29 +151,35 @@ exports.updateMachine = async (req, res) => {
   }
 }
 
-// Delete a machine
+// Delete a machine with cascading deletes
 exports.deleteMachine = async (req, res) => {
   try {
     const Call = require("../../models/logistic/CallModel")
 
-    // Check if machine has associated calls
-    const callsCount = await Call.countDocuments({
-      machines: req.params.id,
-    })
-    if (callsCount > 0) {
-      return res.status(400).json({
-        message: "Cannot delete machine. It has associated calls.",
-      })
-    }
+    const machineId = req.params.id
 
-    const deletedMachine = await Machine.findByIdAndDelete(req.params.id)
-
-    if (!deletedMachine) {
+    // Check if machine exists
+    const machine = await Machine.findById(machineId)
+    if (!machine) {
       return res.status(404).json({ message: "Machine not found." })
     }
 
-    res.status(200).json({ message: "Machine deleted successfully." })
+    // Delete all calls associated with this machine
+    const deletedCalls = await Call.deleteMany({ machines: machineId })
+    console.log(`Deleted ${deletedCalls.deletedCount} calls associated with machine: ${machineId}`)
+
+    // Delete the machine
+    await Machine.findByIdAndDelete(machineId)
+
+    res.status(200).json({
+      message: "Machine and all associated calls deleted successfully.",
+      deletedRecords: {
+        machine: 1,
+        calls: deletedCalls.deletedCount,
+      },
+    })
   } catch (error) {
+    console.error("Error deleting machine:", error)
     res.status(500).json({ message: "Server error while deleting machine.", error })
   }
 }
