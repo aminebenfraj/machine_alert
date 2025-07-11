@@ -10,6 +10,8 @@ const callRoutes = require("./routes/logistic/callRoutes")
 const categoryRoutes = require("./routes/categoryRoutes")
 const factoryRoutes = require("./routes/factoryRoutes")
 const { initCronJobs } = require("./crone/callStatusCron")
+const path = require("path");
+
 
 const app = express()
 const PORT = process.env.PORT || 5000
@@ -25,8 +27,9 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
-
+app.options('*', cors());
 app.use(express.json())
+app.use(express.static(path.join(__dirname, 'build'))); // Adjust if needed
 
 // MongoDB Connection
 mongoose
@@ -52,7 +55,9 @@ app.use("/api/machines", machineRoutes)
 app.use("/api/calls", callRoutes) // Changed from "call" to "calls" for consistency
 app.use("/api/categories", categoryRoutes) // Changed from "call" to "calls" for consistency
 app.use("/api/factories", factoryRoutes) // Changed from "call" to "calls" for consistency
-
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'build', 'index.html')); // Adjust if needed
+});
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack)
